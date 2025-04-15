@@ -5,6 +5,7 @@
 const dataHandler = (() => {
   // Constants
   const API_ENDPOINT = "/api/data";
+  const BATCH_SIZE = 500; // Maximum number of items to send in a single API request
 
   // Private methods
   const _fetchData = async (endpoint, params = {}) => {
@@ -40,6 +41,159 @@ const dataHandler = (() => {
       // Return empty array to prevent cascading errors
       return [];
     }
+  };
+
+  /**
+   * Process data in chunks to avoid payload size limits
+   * @param {Array} data - The data to process in chunks
+   * @param {number} chunkSize - Maximum size of each chunk
+   * @returns {Array} - Array of chunks
+   */
+  const _chunkArray = (data, chunkSize) => {
+    const chunks = [];
+    for (let i = 0; i < data.length; i += chunkSize) {
+      chunks.push(data.slice(i, i + chunkSize));
+    }
+    return chunks;
+  };
+
+  /**
+   * Export data in batches to avoid large payloads
+   * @param {Object} data - Data to export
+   * @param {Function} progressCallback - Callback for progress updates
+   * @returns {Promise<string>} - Filename of the exported data
+   */
+  const _batchedExport = async (data, progressCallback) => {
+    // Generate a unique session ID for this export
+    const sessionId = Date.now().toString();
+    let currentProgress = 85;
+    let totalChunks = 0;
+    let processedChunks = 0;
+
+    // Calculate total number of chunks
+    if (data.likedVideos && data.likedVideos.length > 0) {
+      totalChunks += Math.ceil(data.likedVideos.length / BATCH_SIZE);
+    }
+    if (data.watchHistory && data.watchHistory.length > 0) {
+      totalChunks += Math.ceil(data.watchHistory.length / BATCH_SIZE);
+    }
+
+    // If no chunks (empty data), create one empty chunk
+    if (totalChunks === 0) {
+      totalChunks = 1;
+    }
+
+    // Start multi-part export
+    if (progressCallback) {
+      progressCallback(currentProgress, `Preparing to export data in ${totalChunks} parts...`);
+    }
+
+    // Initialize export session
+    const initResponse = await fetch(`${API_ENDPOINT}/export/init`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${auth.getAccessToken()}`,
+      },
+      body: JSON.stringify({ sessionId, totalChunks }),
+    });
+
+    if (!initResponse.ok) {
+      const errorData = await initResponse.json().catch(() => ({}));
+      throw new Error(errorData.message || "Failed to initialize export session");
+    }
+
+    // Process liked videos in chunks
+    if (data.likedVideos && data.likedVideos.length > 0) {
+      const chunks = _chunkArray(data.likedVideos, BATCH_SIZE);
+      for (let i = 0; i < chunks.length; i++) {
+        if (progressCallback) {
+          currentProgress = 85 + (10 * (processedChunks / totalChunks));
+          progressCallback(
+            currentProgress,
+            `Exporting liked videos part ${i + 1}/${chunks.length}...`
+          );
+        }
+
+        const response = await fetch(`${API_ENDPOINT}/export/chunk`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${auth.getAccessToken()}`,
+          },
+          body: JSON.stringify({
+            sessionId,
+            chunkIndex: processedChunks,
+            dataType: "likedVideos",
+            data: chunks[i],
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || "Failed to export data chunk");
+        }
+
+        processedChunks++;
+      }
+    }
+
+    // Process watch history in chunks
+    if (data.watchHistory && data.watchHistory.length > 0) {
+      const chunks = _chunkArray(data.watchHistory, BATCH_SIZE);
+      for (let i = 0; i < chunks.length; i++) {
+        if (progressCallback) {
+          currentProgress = 85 + (10 * (processedChunks / totalChunks));
+          progressCallback(
+            currentProgress,
+            `Exporting watch history part ${i + 1}/${chunks.length}...`
+          );
+        }
+
+        const response = await fetch(`${API_ENDPOINT}/export/chunk`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${auth.getAccessToken()}`,
+          },
+          body: JSON.stringify({
+            sessionId,
+            chunkIndex: processedChunks,
+            dataType: "watchHistory",
+            data: chunks[i],
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || "Failed to export data chunk");
+        }
+
+        processedChunks++;
+      }
+    }
+
+    // Finalize the export and get the filename
+    if (progressCallback) {
+      progressCallback(95, "Finalizing export...");
+    }
+
+    const finalizeResponse = await fetch(`${API_ENDPOINT}/export/finalize`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${auth.getAccessToken()}`,
+      },
+      body: JSON.stringify({ sessionId }),
+    });
+
+    if (!finalizeResponse.ok) {
+      const errorData = await finalizeResponse.json().catch(() => ({}));
+      throw new Error(errorData.message || "Failed to finalize export");
+    }
+
+    const result = await finalizeResponse.json();
+    return result.filename;
   };
 
   // Public API
@@ -129,35 +283,51 @@ const dataHandler = (() => {
       }
 
       // Check if we have any data to export
-      if ((dataToExport.likedVideos && dataToExport.likedVideos.length === 0) &&
-          (dataToExport.watchHistory && dataToExport.watchHistory.length === 0)) {
+      if (
+        (dataToExport.likedVideos && dataToExport.likedVideos.length === 0) &&
+        (dataToExport.watchHistory && dataToExport.watchHistory.length === 0)
+      ) {
         // Only throw if both are empty and both were requested
         if (options.likedVideos && options.watchHistory) {
           throw new Error("No data available to export. YouTube API restrictions may prevent access to this data.");
         }
       }
 
-      // Generate the CSV file on the server
+      // Generate the CSV file on the server using batched approach
       if (progressCallback) {
         progressCallback(85, "Generating CSV file...");
       }
 
       try {
-        const response = await fetch(`${API_ENDPOINT}/export`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${auth.getAccessToken()}`,
-          },
-          body: JSON.stringify(dataToExport),
-        });
+        // Determine if we should use batched export (for large datasets)
+        const totalItems = 
+          (dataToExport.likedVideos ? dataToExport.likedVideos.length : 0) + 
+          (dataToExport.watchHistory ? dataToExport.watchHistory.length : 0);
+        
+        let filename;
+        
+        if (totalItems > BATCH_SIZE) {
+          // Use batched export for large datasets
+          filename = await _batchedExport(dataToExport, progressCallback);
+        } else {
+          // Use simple export for small datasets
+          const response = await fetch(`${API_ENDPOINT}/export`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${auth.getAccessToken()}`,
+            },
+            body: JSON.stringify(dataToExport),
+          });
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || "Failed to generate CSV file");
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || "Failed to generate CSV file");
+          }
+
+          const result = await response.json();
+          filename = result.filename;
         }
-
-        const result = await response.json();
 
         if (progressCallback) {
           let message = "Export completed!";
@@ -167,7 +337,7 @@ const dataHandler = (() => {
           progressCallback(100, message);
         }
 
-        return result.filename;
+        return filename;
       } catch (error) {
         console.error("Error generating CSV:", error);
         throw error;

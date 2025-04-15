@@ -9,6 +9,7 @@ const path = require("path");
 const cors = require("cors");
 const session = require("express-session");
 const fs = require("fs");
+const compression = require("compression"); // Add compression middleware
 
 // Load configuration
 const config = require("./config/config");
@@ -21,8 +22,12 @@ const dataRoutes = require("./routes/dataRoutes");
 const app = express();
 
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase JSON body parser limits for large datasets
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Enable compression for all responses
+app.use(compression());
 
 // Enable CORS
 app.use(
