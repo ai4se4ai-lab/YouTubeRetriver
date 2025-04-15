@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Data Exporter</title>
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>YouTube Data Exporter</h1>
+            <p>Export your liked and watched videos to CSV</p>
+        </header>
+
+        <main>
+            <section id="auth-section" class="card">
+                <h2>Authentication</h2>
+                <p>Connect to your YouTube account to retrieve your data.</p>
+                <div id="login-status">Not connected</div>
+                <button id="auth-button" class="btn primary">Connect to YouTube</button>
+            </section>
+
+            <section id="data-section" class="card hidden">
+                <h2>Data Export Options</h2>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="liked-videos" checked>
+                        Liked Videos
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="watch-history" checked>
+                        Watch History
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="max-results">Maximum results (per category):</label>
+                    <input type="number" id="max-results" min="1" max="5000" value="250">
+                </div>
+                <button id="export-button" class="btn primary">Export Data</button>
+            </section>
+
+            <section id="results-section" class="card hidden">
+                <h2>Results</h2>
+                <div id="progress-container">
+                    <div id="progress-bar"></div>
+                </div>
+                <div id="export-status"></div>
+                <div id="download-container" class="hidden">
+                    <p>Your data is ready!</p>
+                    <button id="download-button" class="btn secondary">Download CSV</button>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>YouTube Data Exporter &copy; 2025 | <a href="#" id="privacy-link">Privacy Policy</a></p>
+        </footer>
+    </div>
+
+    <!-- Modal for privacy policy -->
+    <div id="privacy-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Privacy Policy</h2>
+            <p>Your privacy is important to us. This application:</p>
+            <ul>
+                <li>Only requests access to your YouTube data with your explicit permission</li>
+                <li>Stores data only on your device, not on our servers</li>
+                <li>Never shares your data with third parties</li>
+                <li>Requires minimum permissions necessary to function</li>
+            </ul>
+            <p>The application will request access to:</p>
+            <ul>
+                <li>View your YouTube account</li>
+                <li>See your liked videos</li>
+                <li>Access your watch history</li>
+            </ul>
+            <p>You can revoke access at any time by visiting your <a href="https://myaccount.google.com/permissions" target="_blank">Google Account Permissions</a>.</p>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/auth.js"></script>
+    <script src="js/dataHandler.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
