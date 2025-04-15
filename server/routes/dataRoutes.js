@@ -23,7 +23,12 @@ router.get(
   dataController.getStatistics
 );
 
-// Export data to CSV
+// Export data to CSV (single request method)
 router.post("/export", helpers.authenticateToken, dataController.exportToCsv);
+
+// New chunked export routes for handling large datasets
+router.post("/export/init", helpers.authenticateToken, dataController.initExport);
+router.post("/export/chunk", helpers.authenticateToken, dataController.addExportChunk);
+router.post("/export/finalize", helpers.authenticateToken, dataController.finalizeExport);
 
 module.exports = router;
