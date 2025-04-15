@@ -181,7 +181,7 @@ const auth = (() => {
         };
 
         console.log("Adding message listener");
-        //window.addEventListener("message", messageListener);
+        window.addEventListener("message", messageListener);
 
         // Check if the popup is closed before authentication completes
         const popupCheckInterval = setInterval(() => {

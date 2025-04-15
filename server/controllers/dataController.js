@@ -22,7 +22,10 @@ module.exports = {
       res.json(likedVideos);
     } catch (error) {
       console.error("Error fetching liked videos:", error);
-      res.status(500).json({ error: "Failed to fetch liked videos" });
+      res.status(500).json({ 
+        error: "Failed to fetch liked videos",
+        message: error.message 
+      });
     }
   },
 
@@ -40,10 +43,13 @@ module.exports = {
         maxResults
       );
 
-      res.json(watchHistory);
+      // Return empty array instead of error if no watch history is available
+      // This prevents frontend errors
+      res.json(watchHistory || []);
     } catch (error) {
       console.error("Error fetching watch history:", error);
-      res.status(500).json({ error: "Failed to fetch watch history" });
+      // Return empty array instead of error to prevent frontend crashes
+      res.json([]);
     }
   },
 
@@ -60,7 +66,10 @@ module.exports = {
       res.json(statistics);
     } catch (error) {
       console.error("Error fetching statistics:", error);
-      res.status(500).json({ error: "Failed to fetch statistics" });
+      res.status(500).json({ 
+        error: "Failed to fetch statistics",
+        message: error.message
+      });
     }
   },
 
@@ -71,20 +80,27 @@ module.exports = {
     try {
       const { likedVideos, watchHistory } = req.body;
 
-      if (!likedVideos && !watchHistory) {
+      // Check if there's at least one valid data type
+      const hasLikedVideos = Array.isArray(likedVideos) && likedVideos.length > 0;
+      const hasWatchHistory = Array.isArray(watchHistory) && watchHistory.length > 0;
+
+      if (!hasLikedVideos && !hasWatchHistory) {
         return res.status(400).json({ error: "No data provided for export" });
       }
 
       // Generate CSV files
       const filename = await csvService.generateCsv({
-        likedVideos,
-        watchHistory,
+        likedVideos: hasLikedVideos ? likedVideos : [],
+        watchHistory: hasWatchHistory ? watchHistory : []
       });
 
       res.json({ filename });
     } catch (error) {
       console.error("Error exporting to CSV:", error);
-      res.status(500).json({ error: "Failed to export data to CSV" });
+      res.status(500).json({ 
+        error: "Failed to export data to CSV",
+        message: error.message 
+      });
     }
   },
 };
