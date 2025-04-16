@@ -10,6 +10,8 @@ const cors = require("cors");
 const session = require("express-session");
 const fs = require("fs");
 const compression = require("compression"); // Add compression middleware
+const http = require("http");
+const socketIo = require("socket.io");
 
 // Load configuration
 const config = require("./config/config");
@@ -17,14 +19,30 @@ const config = require("./config/config");
 // Import routes
 const authRoutes = require("./routes/authRoutes");
 const dataRoutes = require("./routes/dataRoutes");
+const agentRoutes = require("./routes/agentRoutes");
+
+// Import controllers
+const agentController = require("./controllers/agentController");
 
 // Create Express app
 const app = express();
 
+// Create HTTP server with Express app
+const server = http.createServer(app);
+
+// Initialize Socket.IO
+const io = socketIo(server, {
+  cors: {
+    origin: config.security.corsOrigin,
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
+
 // Middleware
 // Increase JSON body parser limits for large datasets
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // Enable compression for all responses
 app.use(compression());
@@ -57,6 +75,7 @@ app.use(express.static(path.join(__dirname, "../public")));
 // API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/data", dataRoutes);
+app.use("/api/agents", agentRoutes);
 
 // Development-only route to check environment variables
 if (config.server.nodeEnv === "development") {
@@ -66,6 +85,7 @@ if (config.server.nodeEnv === "development") {
       googleClientSecretExists: !!config.google.clientSecret,
       googleRedirectUri: config.google.redirectUri,
       corsOrigin: config.security.corsOrigin,
+      openaiApiKeyExists: !!config.agents.openaiApiKey,
     });
   });
 }
@@ -103,12 +123,16 @@ if (!fs.existsSync(config.storage.tempDir)) {
   fs.mkdirSync(config.storage.tempDir, { recursive: true });
 }
 
+// Set up Socket.IO handlers
+agentController.setupSocketHandlers(io);
+
 // Start server
 const PORT = config.server.port;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${config.server.nodeEnv}`);
   console.log(`Auth endpoint: ${config.google.redirectUri}`);
+  console.log(`Socket.IO initialized`);
 });
 
 // Cleanup function for temporary files

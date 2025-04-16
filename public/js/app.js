@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // DOM Elements
   const authButton = document.getElementById("auth-button");
   const exportButton = document.getElementById("export-button");
+  const agentStartButton = document.getElementById("agent-start-btn");
   const downloadButton = document.getElementById("download-button");
   const privacyLink = document.getElementById("privacy-link");
   const closeModal = document.querySelector(".close-modal");
@@ -16,6 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const loginStatus = document.getElementById("login-status");
   const dataSection = document.getElementById("data-section");
   const resultsSection = document.getElementById("results-section");
+  const agentSystemSection = document.getElementById("agent-system");
   const downloadContainer = document.getElementById("download-container");
   const exportStatus = document.getElementById("export-status");
   const progressBar = document.getElementById("progress-bar");
@@ -24,6 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log("Auth button found:", !!authButton);
   console.log("Login status element found:", !!loginStatus);
   console.log("Data section found:", !!dataSection);
+  console.log("Agent start button found:", !!agentStartButton);
 
   // Check if user is already authenticated on page load
   auth
@@ -99,6 +102,9 @@ document.addEventListener("DOMContentLoaded", () => {
       progressBar.style.width = "0%";
       exportStatus.textContent = "Starting export...";
 
+      // Hide agent system if visible
+      agentSystemSection.classList.add("hidden");
+
       // Start the export process
       dataHandler
         .exportData(options, updateProgress)
@@ -139,6 +145,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Cancel approval button
+  const cancelApprovalBtn = document.getElementById("cancel-approval");
+  if (cancelApprovalBtn) {
+    cancelApprovalBtn.addEventListener("click", () => {
+      document.getElementById("approval-modal").classList.remove("active");
+    });
+  }
+
+  // Approval modal close
+  const approvalModalClose = document.querySelector(
+    "#approval-modal .close-modal"
+  );
+  if (approvalModalClose) {
+    approvalModalClose.addEventListener("click", () => {
+      document.getElementById("approval-modal").classList.remove("active");
+    });
+  }
+
   // Helper functions
   function updateUIOnAuth(isAuthenticated) {
     console.log("Updating UI, authenticated:", isAuthenticated);
@@ -153,6 +177,7 @@ document.addEventListener("DOMContentLoaded", () => {
       loginStatus.classList.remove("connected");
       dataSection.classList.add("hidden");
       resultsSection.classList.add("hidden");
+      agentSystemSection.classList.add("hidden");
     }
   }
 

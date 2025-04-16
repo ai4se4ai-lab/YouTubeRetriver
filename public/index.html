@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Data Exporter</title>
+    <title>YouTube Data Exporter & AI Analyzer</title>
     <link rel="stylesheet" href="css/normalize.css">
     <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/agents.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>YouTube Data Exporter</h1>
-            <p>Export your liked and watched videos to CSV</p>
+            <h1>YouTube Data Exporter & AI Analyzer</h1>
+            <p>Export your liked and watched videos to CSV and analyze with AI agents</p>
         </header>
 
         <main>
@@ -23,7 +24,7 @@
             </section>
 
             <section id="data-section" class="card hidden">
-                <h2>Data Export Options</h2>
+                <h2>Data Export & Analysis Options</h2>
                 <div class="form-group">
                     <label>
                         <input type="checkbox" id="liked-videos" checked>
@@ -40,7 +41,10 @@
                     <label for="max-results">Maximum results (per category):</label>
                     <input type="number" id="max-results" min="1" max="5000" value="250">
                 </div>
-                <button id="export-button" class="btn primary">Export Data</button>
+                <div class="buttons-container">
+                    <button id="export-button" class="btn primary">Export Data to CSV</button>
+                    <button id="agent-start-btn" class="btn secondary">Analyze with AI Agents</button>
+                </div>
             </section>
 
             <section id="results-section" class="card hidden">
@@ -54,10 +58,307 @@
                     <button id="download-button" class="btn secondary">Download CSV</button>
                 </div>
             </section>
+
+            <!-- Agent System Interface -->
+            <section id="agent-system" class="card hidden agent-system">
+                <div class="agent-system-header">
+                    <h2>AI Agent Analysis</h2>
+                    <p>Our intelligent agents are analyzing your YouTube data to generate personalized insights</p>
+                </div>
+                
+                <!-- Data Analysis Layer -->
+                <div class="agent-layer" id="data-analysis-layer">
+                    <div class="layer-title">
+                        <span>Data Analysis Layer</span>
+                    </div>
+                    <div class="layer-description">
+                        These agents process your YouTube data to extract patterns and retrieve relevant information
+                    </div>
+                    <div class="agent-cards">
+                        <!-- Content Analysis Agent -->
+                        <div class="agent-card idle" id="contentAnalysis-card">
+                            <div class="agent-header">
+                                <div class="agent-name">Content Analysis Agent</div>
+                                <div class="agent-status idle">Idle</div>
+                            </div>
+                            <div class="agent-description">
+                                Processes YouTube data to extract themes, topics, and user interests
+                            </div>
+                            <div class="agent-progress">
+                                <div class="agent-progress-bar"></div>
+                            </div>
+                            <div class="agent-details">
+                                <span class="agent-id">A21</span>
+                                <span class="agent-time"></span>
+                            </div>
+                            <div class="agent-action-buttons">
+                                <button class="btn approve-button hidden">Approve</button>
+                            </div>
+                            <div class="agent-result-container hidden">
+                                <div class="agent-result"></div>
+                                <span class="agent-result-toggle">Show More</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Knowledge Retrieval Agent -->
+                        <div class="agent-card idle" id="knowledgeRetrieval-card">
+                            <div class="agent-header">
+                                <div class="agent-name">Knowledge Retrieval Agent</div>
+                                <div class="agent-status idle">Idle</div>
+                            </div>
+                            <div class="agent-description">
+                                Gathers information related to identified topics to support analogy generation
+                            </div>
+                            <div class="agent-progress">
+                                <div class="agent-progress-bar"></div>
+                            </div>
+                            <div class="agent-details">
+                                <span class="agent-id">A22</span>
+                                <span class="agent-time"></span>
+                            </div>
+                            <div class="agent-action-buttons">
+                                <button class="btn approve-button hidden">Approve</button>
+                            </div>
+                            <div class="agent-result-container hidden">
+                                <div class="agent-result"></div>
+                                <span class="agent-result-toggle">Show More</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Analogical Reasoning Layer -->
+                <div class="agent-layer" id="analogical-reasoning-layer">
+                    <div class="layer-title">
+                        <span>Analogical Reasoning Layer</span>
+                    </div>
+                    <div class="layer-description">
+                        These agents generate, validate, and refine analogies based on your interests
+                    </div>
+                    <div class="agent-cards">
+                        <!-- Analogy Generation Agent -->
+                        <div class="agent-card idle" id="analogyGeneration-card">
+                            <div class="agent-header">
+                                <div class="agent-name">Analogy Generation Agent</div>
+                                <div class="agent-status idle">Idle</div>
+                            </div>
+                            <div class="agent-description">
+                                Creates analogies by mapping your interests to complex concepts
+                            </div>
+                            <div class="agent-progress">
+                                <div class="agent-progress-bar"></div>
+                            </div>
+                            <div class="agent-details">
+                                <span class="agent-id">A31</span>
+                                <span class="agent-time"></span>
+                            </div>
+                            <div class="agent-action-buttons">
+                                <button class="btn approve-button hidden">Approve</button>
+                            </div>
+                            <div class="agent-result-container hidden">
+                                <div class="agent-result"></div>
+                                <span class="agent-result-toggle">Show More</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Analogy Validation Agent -->
+                        <div class="agent-card idle" id="analogyValidation-card">
+                            <div class="agent-header">
+                                <div class="agent-name">Analogy Validation Agent</div>
+                                <div class="agent-status idle">Idle</div>
+                            </div>
+                            <div class="agent-description">
+                                Evaluates analogies for accuracy, relevance, and educational value
+                            </div>
+                            <div class="agent-progress">
+                                <div class="agent-progress-bar"></div>
+                            </div>
+                            <div class="agent-details">
+                                <span class="agent-id">A32</span>
+                                <span class="agent-time"></span>
+                            </div>
+                            <div class="agent-action-buttons">
+                                <button class="btn approve-button hidden">Approve</button>
+                            </div>
+                            <div class="agent-result-container hidden">
+                                <div class="agent-result"></div>
+                                <span class="agent-result-toggle">Show More</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Analogy Refinement Agent -->
+                        <div class="agent-card idle" id="analogyRefinement-card">
+                            <div class="agent-header">
+                                <div class="agent-name">Analogy Refinement Agent</div>
+                                <div class="agent-status idle">Idle</div>
+                            </div>
+                            <div class="agent-description">
+                                Refines analogies based on validation feedback
+                            </div>
+                            <div class="agent-progress">
+                                <div class="agent-progress-bar"></div>
+                            </div>
+                            <div class="agent-details">
+                                <span class="agent-id">A33</span>
+                                <span class="agent-time"></span>
+                            </div>
+                            <div class="agent-action-buttons">
+                                <button class="btn approve-button hidden">Approve</button>
+                            </div>
+                            <div class="agent-result-container hidden">
+                                <div class="agent-result"></div>
+                                <span class="agent-result-toggle">Show More</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Result Presentation Layer -->
+                <div class="agent-layer" id="result-presentation-layer">
+                    <div class="layer-title">
+                        <span>Result Presentation Layer</span>
+                    </div>
+                    <div class="layer-description">
+                        This agent presents the final analogies in an understandable and engaging manner
+                    </div>
+                    <div class="agent-cards">
+                        <!-- Explanation Agent -->
+                        <div class="agent-card idle" id="explanation-card">
+                            <div class="agent-header">
+                                <div class="agent-name">Explanation Agent</div>
+                                <div class="agent-status idle">Idle</div>
+                            </div>
+                            <div class="agent-description">
+                                Presents the final analogies in an engaging and educational way
+                            </div>
+                            <div class="agent-progress">
+                                <div class="agent-progress-bar"></div>
+                            </div>
+                            <div class="agent-details">
+                                <span class="agent-id">A4</span>
+                                <span class="agent-time"></span>
+                            </div>
+                            <div class="agent-action-buttons">
+                                <button class="btn approve-button hidden">Approve</button>
+                            </div>
+                            <div class="agent-result-container hidden">
+                                <div class="agent-result"></div>
+                                <span class="agent-result-toggle">Show More</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Feedback and Learning Layer -->
+                <div class="agent-layer" id="feedback-learning-layer">
+                    <div class="layer-title">
+                        <span>Feedback and Learning Layer</span>
+                    </div>
+                    <div class="layer-description">
+                        These agents process your feedback to improve future analyses
+                    </div>
+                    <div class="agent-cards">
+                        <!-- User Feedback Agent -->
+                        <div class="agent-card idle" id="userFeedback-card">
+                            <div class="agent-header">
+                                <div class="agent-name">User Feedback Agent</div>
+                                <div class="agent-status idle">Idle</div>
+                            </div>
+                            <div class="agent-description">
+                                Processes your feedback to assess analogy effectiveness
+                            </div>
+                            <div class="agent-progress">
+                                <div class="agent-progress-bar"></div>
+                            </div>
+                            <div class="agent-details">
+                                <span class="agent-id">A51</span>
+                                <span class="agent-time"></span>
+                            </div>
+                            <div class="agent-result-container hidden">
+                                <div class="agent-result"></div>
+                                <span class="agent-result-toggle">Show More</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Learning Agent -->
+                        <div class="agent-card idle" id="learning-card">
+                            <div class="agent-header">
+                                <div class="agent-name">Learning Agent</div>
+                                <div class="agent-status idle">Idle</div>
+                            </div>
+                            <div class="agent-description">
+                                Analyzes feedback patterns to improve future analogies
+                            </div>
+                            <div class="agent-progress">
+                                <div class="agent-progress-bar"></div>
+                            </div>
+                            <div class="agent-details">
+                                <span class="agent-id">A52</span>
+                                <span class="agent-time"></span>
+                            </div>
+                            <div class="agent-result-container hidden">
+                                <div class="agent-result"></div>
+                                <span class="agent-result-toggle">Show More</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Control and Coordination Layer -->
+                <div class="agent-layer" id="control-coordination-layer">
+                    <div class="layer-title">
+                        <span>Control and Coordination Layer</span>
+                    </div>
+                    <div class="layer-description">
+                        This agent orchestrates the entire workflow, ensuring proper coordination
+                    </div>
+                    <div class="agent-cards">
+                        <!-- Orchestrator Agent -->
+                        <div class="agent-card idle" id="orchestrator-card">
+                            <div class="agent-header">
+                                <div class="agent-name">Orchestrator Agent</div>
+                                <div class="agent-status idle">Idle</div>
+                            </div>
+                            <div class="agent-description">
+                                Manages workflow and coordination among all agents
+                            </div>
+                            <div class="agent-progress">
+                                <div class="agent-progress-bar"></div>
+                            </div>
+                            <div class="agent-details">
+                                <span class="agent-id">A6</span>
+                                <span class="agent-time"></span>
+                            </div>
+                            <div class="agent-result-container hidden">
+                                <div class="agent-result"></div>
+                                <span class="agent-result-toggle">Show More</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Agent Connections -->
+                <div class="agent-connections">
+                    <svg id="agent-connections-svg" width="100%" height="100%"></svg>
+                </div>
+            </section>
+            
+            <!-- Feedback Section -->
+            <section id="feedback-section" class="card hidden">
+                <h2>Provide Feedback</h2>
+                <p>Your feedback helps our agents learn and improve. Please share your thoughts on the analysis.</p>
+                <div class="feedback-form">
+                    <textarea id="feedback-text" class="feedback-textarea" placeholder="What did you think of the analysis? Was it insightful? Accurate? Useful?"></textarea>
+                    <div class="feedback-actions">
+                        <button id="feedback-submit-btn" class="btn primary" disabled>Submit Feedback</button>
+                    </div>
+                </div>
+                <div id="feedback-status"></div>
+            </section>
         </main>
 
         <footer>
-            <p>YouTube Data Exporter &copy; 2025 | <a href="#" id="privacy-link">Privacy Policy</a></p>
+            <p>YouTube Data Exporter & AI Analyzer &copy; 2025 | <a href="#" id="privacy-link">Privacy Policy</a></p>
         </footer>
     </div>
 
@@ -82,10 +383,30 @@
             <p>You can revoke access at any time by visiting your <a href="https://myaccount.google.com/permissions" target="_blank">Google Account Permissions</a>.</p>
         </div>
     </div>
+    
+    <!-- Approval Modal -->
+    <div id="approval-modal" class="approval-modal">
+        <div class="approval-content">
+            <div class="approval-header">
+                <h3 class="approval-title">Approve Agent Result</h3>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="approval-body">
+                <p>Please review the result from this agent and approve to continue:</p>
+                <div class="approval-result"></div>
+            </div>
+            <div class="approval-actions">
+                <button class="btn secondary" id="cancel-approval">Cancel</button>
+                <button class="btn primary approve-button">Approve</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Scripts -->
+    <script src="/socket.io/socket.io.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/dataHandler.js"></script>
+    <script src="js/agents.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
