@@ -25,14 +25,24 @@ class BaseAgent {
    * Process data through the agent
    * @param {Object} data - Input data to process
    * @param {string} prompt - Specific prompt for this processing
+   * @param {string} editedContent - Optional edited content from previous step
    * @returns {Promise<Object>} - Processing result
    */
-  async process(data, prompt) {
+  async process(data, prompt, editedContent = null) {
     this.startTime = Date.now();
     this.processed = false;
 
     try {
       console.log(`${this.name} starting processing...`);
+
+      // If we have edited content and it's relevant to this processing
+      // (e.g., it's from a previous agent that feeds into this one),
+      // we can incorporate it into our processing logic here
+      if (editedContent) {
+        console.log(`${this.name} processing with edited content`);
+        // You might need to update 'data' based on editedContent
+        // This is specific to each agent's implementation
+      }
 
       const messages = [
         {

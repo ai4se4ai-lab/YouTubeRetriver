@@ -67,7 +67,7 @@ module.exports = {
    */
   async approveStep(req, res) {
     try {
-      const { sessionId, step } = req.body;
+      const { sessionId, step, editedContent } = req.body;
 
       if (
         !pendingApprovals.has(sessionId) ||
@@ -78,14 +78,21 @@ module.exports = {
           .json({ error: "No pending approval found for this step" });
       }
 
-      // Get the resolver function
-      const { resolve } = pendingApprovals.get(sessionId).get(step);
+      // Get the resolver function and original result
+      const { resolve, result } = pendingApprovals.get(sessionId).get(step);
+
+      // If there's edited content, update the result
+      if (editedContent) {
+        if (result && result.result) {
+          result.result.output = editedContent;
+        }
+      }
 
       // Remove from pending map
       pendingApprovals.get(sessionId).delete(step);
 
       // Resolve the promise to continue processing
-      resolve();
+      resolve(result);
 
       res.json({
         success: true,
@@ -222,7 +229,7 @@ module.exports = {
 
       // Listen for step approval
       socket.on("approveStep", (data) => {
-        const { sessionId, step } = data;
+        const { sessionId, step, editedContent } = data;
 
         if (
           pendingApprovals.has(sessionId) &&
@@ -230,14 +237,21 @@ module.exports = {
         ) {
           console.log(`Step ${step} approved via socket`);
 
-          // Get the resolver function
-          const { resolve } = pendingApprovals.get(sessionId).get(step);
+          // Get the resolver function and result
+          const { resolve, result } = pendingApprovals.get(sessionId).get(step);
+
+          // If there's edited content, update the result
+          if (editedContent) {
+            if (result && result.result) {
+              result.result.output = editedContent;
+            }
+          }
 
           // Remove from pending map
           pendingApprovals.get(sessionId).delete(step);
 
           // Resolve the promise to continue processing
-          resolve();
+          resolve(result);
 
           // Notify all clients subscribed to this session
           io.to(sessionId).emit("stepApproved", { step });
@@ -256,6 +270,12 @@ module.exports = {
           );
 
           if (explanationResult) {
+            // Process feedback and update status
+            io.to(sessionId).emit("processingStep", {
+              step: "userFeedback",
+              status: "starting",
+            });
+
             // Process feedback
             const results = await agentService.submitFeedback(
               feedback,

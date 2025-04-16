@@ -16,6 +16,8 @@
     --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     --border-radius: 4px;
     --transition: all 0.3s ease;
+    --code-bg: #f7f7f7;
+    --editor-bg: #f9f9f9;
 }
 
 /* Agent Panels */
@@ -162,7 +164,6 @@
     max-height: 200px;
     overflow-y: auto;
     font-size: 0.9rem;
-    white-space: pre-wrap;
     line-height: 1.5;
 }
 
@@ -177,6 +178,91 @@
     color: var(--accent-color);
     cursor: pointer;
     margin-top: 5px;
+}
+
+/* Markdown and Code Formatting */
+.markdown-view {
+    background-color: var(--white);
+    padding: 15px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gray);
+    overflow-y: auto;
+    max-height: 400px;
+}
+
+.markdown-view h1, 
+.markdown-view h2, 
+.markdown-view h3, 
+.markdown-view h4 {
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    color: var(--secondary-color);
+}
+
+.markdown-view pre {
+    background-color: var(--code-bg);
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.markdown-view code {
+    background-color: var(--code-bg);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+}
+
+.markdown-view blockquote {
+    border-left: 4px solid var(--gray);
+    padding-left: 15px;
+    margin-left: 0;
+    color: var(--dark-gray);
+}
+
+.markdown-view ul, 
+.markdown-view ol {
+    padding-left: 20px;
+}
+
+.editable-content {
+    background-color: var(--editor-bg);
+    padding: 15px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gray);
+    min-height: 200px;
+    max-height: 400px;
+    overflow-y: auto;
+    font-family: 'Courier New', Courier, monospace;
+    white-space: pre-wrap;
+    line-height: 1.5;
+}
+
+.editor-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.editor-toggle-btn, 
+.editor-save-btn {
+    font-size: 0.8rem;
+    padding: 5px 10px;
+}
+
+.save-confirmation {
+    color: var(--success-color);
+    font-size: 0.8rem;
+    margin-left: 10px;
+    align-self: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.save-confirmation.visible {
+    opacity: 1;
 }
 
 /* Agent Connection Lines */
@@ -328,6 +414,11 @@
     display: flex;
     justify-content: flex-end;
     gap: 10px;
+}
+
+/* Utility classes */
+.hidden {
+    display: none !important;
 }
 
 /* Responsive Adjustments */

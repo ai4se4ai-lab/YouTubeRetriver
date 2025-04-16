@@ -138,7 +138,13 @@ class AgentManager extends EventEmitter {
       this.updateState("contentAnalysis", contentAnalysisResult);
 
       // Wait for user approval
-      await approvalCallback("contentAnalysis", contentAnalysisResult);
+      const approvedContentAnalysis = await approvalCallback(
+        "contentAnalysis",
+        contentAnalysisResult
+      );
+      // Use either approved content or original result
+      const finalContentAnalysis =
+        approvedContentAnalysis || contentAnalysisResult;
 
       // Step 2: Knowledge Retrieval
       this.emit("processingStep", {
@@ -147,12 +153,17 @@ class AgentManager extends EventEmitter {
       });
       const knowledgeResult =
         await this.agents.knowledgeRetrieval.retrieveKnowledge(
-          contentAnalysisResult
+          finalContentAnalysis
         );
       this.updateState("knowledgeRetrieval", knowledgeResult);
 
       // Wait for user approval
-      await approvalCallback("knowledgeRetrieval", knowledgeResult);
+      const approvedKnowledgeResult = await approvalCallback(
+        "knowledgeRetrieval",
+        knowledgeResult
+      );
+      // Use either approved content or original result
+      const finalKnowledgeResult = approvedKnowledgeResult || knowledgeResult;
 
       // Step 3: Analogy Generation
       this.emit("processingStep", {
@@ -160,8 +171,8 @@ class AgentManager extends EventEmitter {
         status: "starting",
       });
       const combinedInput = {
-        contentAnalysis: contentAnalysisResult,
-        knowledgeRetrieval: knowledgeResult,
+        contentAnalysis: finalContentAnalysis,
+        knowledgeRetrieval: finalKnowledgeResult,
       };
 
       const analogiesResult =
@@ -169,7 +180,12 @@ class AgentManager extends EventEmitter {
       this.updateState("analogyGeneration", analogiesResult);
 
       // Wait for user approval
-      await approvalCallback("analogyGeneration", analogiesResult);
+      const approvedAnalogiesResult = await approvalCallback(
+        "analogyGeneration",
+        analogiesResult
+      );
+      // Use either approved content or original result
+      const finalAnalogiesResult = approvedAnalogiesResult || analogiesResult;
 
       // Step 4: Analogy Validation
       this.emit("processingStep", {
@@ -178,13 +194,19 @@ class AgentManager extends EventEmitter {
       });
       const validationResult =
         await this.agents.analogyValidation.validateAnalogies(
-          analogiesResult,
+          finalAnalogiesResult,
           combinedInput
         );
       this.updateState("analogyValidation", validationResult);
 
       // Wait for user approval
-      await approvalCallback("analogyValidation", validationResult);
+      const approvedValidationResult = await approvalCallback(
+        "analogyValidation",
+        validationResult
+      );
+      // Use either approved content or original result
+      const finalValidationResult =
+        approvedValidationResult || validationResult;
 
       // Step 5: Analogy Refinement
       this.emit("processingStep", {
@@ -193,24 +215,36 @@ class AgentManager extends EventEmitter {
       });
       const refinementResult =
         await this.agents.analogyRefinement.refineAnalogies(
-          validationResult,
-          analogiesResult
+          finalValidationResult,
+          finalAnalogiesResult
         );
       this.updateState("analogyRefinement", refinementResult);
 
       // Wait for user approval
-      await approvalCallback("analogyRefinement", refinementResult);
+      const approvedRefinementResult = await approvalCallback(
+        "analogyRefinement",
+        refinementResult
+      );
+      // Use either approved content or original result
+      const finalRefinementResult =
+        approvedRefinementResult || refinementResult;
 
       // Step 6: Explanation Generation
       this.emit("processingStep", { step: "explanation", status: "starting" });
       const explanationResult = await this.agents.explanation.createExplanation(
-        refinementResult,
-        { contentAnalysis: contentAnalysisResult }
+        finalRefinementResult,
+        { contentAnalysis: finalContentAnalysis }
       );
       this.updateState("explanation", explanationResult);
 
       // Wait for user approval
-      await approvalCallback("explanation", explanationResult);
+      const approvedExplanationResult = await approvalCallback(
+        "explanation",
+        explanationResult
+      );
+      // Use either approved content or original result
+      const finalExplanationResult =
+        approvedExplanationResult || explanationResult;
 
       // Complete workflow
       this.currentState.completed = true;
@@ -226,7 +260,7 @@ class AgentManager extends EventEmitter {
 
       // Return final results
       return {
-        finalExplanation: explanationResult,
+        finalExplanation: finalExplanationResult,
         workflowSummary: workflowSummary,
         processingHistory: this.processingHistory,
         sessionState: this.currentState,

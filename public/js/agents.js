@@ -27,8 +27,24 @@ document.addEventListener("DOMContentLoaded", () => {
       completed: false,
       currentStep: null,
       pendingApproval: null,
+      editedResults: {}, // Store edited results here
     },
   };
+
+  // Markdown converter
+  const md = window.markdownit({
+    html: true,
+    linkify: true,
+    typographer: true,
+    highlight: function (str, lang) {
+      if (lang && hljs.getLanguage(lang)) {
+        try {
+          return hljs.highlight(lang, str).value;
+        } catch (__) {}
+      }
+      return ""; // use external default escaping
+    },
+  });
 
   // Initialize socket connection
   function initSocket() {
@@ -89,8 +105,15 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("Step approved:", data);
 
     if (data.step && agentSystem.agents[data.step]) {
+      // Properly update the agent status to completed
+      agentSystem.agents[data.step].status = "completed";
       agentSystem.workflow.pendingApproval = null;
       hideApprovalModal();
+
+      // If this was the explanation agent, automatically display the feedback form
+      if (data.step === "explanation") {
+        document.getElementById("feedback-section").classList.remove("hidden");
+      }
     }
 
     updateUI();
@@ -148,6 +171,9 @@ document.addEventListener("DOMContentLoaded", () => {
         agentSystem.agents[agent].status = "idle";
         agentSystem.agents[agent].result = null;
       }
+
+      // Clear edited results
+      agentSystem.workflow.editedResults = {};
 
       // Show agent system
       document.getElementById("agent-system").classList.remove("hidden");
@@ -275,19 +301,29 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Approve a step
+  // Approve a step with potentially edited content
   async function approveStep(step) {
     try {
+      // Get the edited content if available
+      const editedContent = agentSystem.workflow.editedResults[step];
+
+      // Create the payload, including edited content if available
+      const payload = {
+        sessionId: agentSystem.sessionId,
+        step: step,
+      };
+
+      if (editedContent) {
+        payload.editedContent = editedContent;
+      }
+
       const response = await fetch("/api/agents/approve", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${auth.getAccessToken()}`,
         },
-        body: JSON.stringify({
-          sessionId: agentSystem.sessionId,
-          step: step,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -296,12 +332,12 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // Also send via socket for redundancy
-      agentSystem.socket.emit("approveStep", {
-        sessionId: agentSystem.sessionId,
-        step: step,
-      });
+      agentSystem.socket.emit("approveStep", payload);
 
       hideApprovalModal();
+
+      // Properly mark the step as completed
+      agentSystem.agents[step].status = "completed";
       agentSystem.workflow.pendingApproval = null;
 
       console.log("Step approved:", step);
@@ -323,6 +359,13 @@ document.addEventListener("DOMContentLoaded", () => {
         alert("Please enter feedback before submitting");
         return;
       }
+
+      // Update UI first to show processing state
+      document.getElementById("feedback-submit-btn").disabled = true;
+      document.getElementById("feedback-status").textContent =
+        "Processing feedback...";
+      agentSystem.agents.userFeedback.status = "processing";
+      updateUI();
 
       const response = await fetch("/api/agents/feedback", {
         method: "POST",
@@ -353,13 +396,35 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("feedback-status").textContent =
         "Feedback submitted, processing...";
 
-      agentSystem.agents.userFeedback.status = "processing";
-      agentSystem.agents.learning.status = "idle";
-
       updateUI();
     } catch (error) {
       console.error("Error submitting feedback:", error);
       alert(`Failed to submit feedback: ${error.message}`);
+      // Reset UI state
+      document.getElementById("feedback-submit-btn").disabled = false;
+      document.getElementById("feedback-status").textContent =
+        "Failed to submit feedback.";
+    }
+  }
+
+  // Save edited result
+  function saveEditedResult(agentKey) {
+    const editableDiv = document.getElementById(`${agentKey}-editable`);
+    if (editableDiv) {
+      const content = editableDiv.innerText;
+      agentSystem.workflow.editedResults[agentKey] = content;
+
+      // Show save confirmation
+      const saveConfirm = document.getElementById(
+        `${agentKey}-save-confirmation`
+      );
+      if (saveConfirm) {
+        saveConfirm.textContent = "Changes saved!";
+        saveConfirm.classList.add("visible");
+        setTimeout(() => {
+          saveConfirm.classList.remove("visible");
+        }, 2000);
+      }
     }
   }
 
@@ -409,22 +474,53 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-      // Update result if available
+      // Update result with markdown if available
       const resultElement = cardElement.querySelector(".agent-result");
       if (resultElement && agentData.result) {
+        let outputContent = "";
+
         if (typeof agentData.result === "object") {
           if (agentData.result.output) {
-            resultElement.textContent = agentData.result.output;
+            outputContent = agentData.result.output;
           } else {
-            resultElement.textContent = JSON.stringify(
-              agentData.result,
-              null,
-              2
-            );
+            outputContent = JSON.stringify(agentData.result, null, 2);
           }
         } else {
-          resultElement.textContent = agentData.result;
+          outputContent = agentData.result;
         }
+
+        // Check if we have an edited version of this content
+        if (agentSystem.workflow.editedResults[agentKey]) {
+          outputContent = agentSystem.workflow.editedResults[agentKey];
+        }
+
+        // Create editable content area
+        resultElement.innerHTML = `
+            <div class="markdown-view">${md.render(outputContent)}</div>
+            <div id="${agentKey}-editable" class="editable-content" contenteditable="true">${outputContent}</div>
+            <div class="editor-controls">
+              <button class="btn editor-toggle-btn">Toggle Editor</button>
+              <button class="btn editor-save-btn" onclick="saveEditedResult('${agentKey}')">Save Changes</button>
+              <span id="${agentKey}-save-confirmation" class="save-confirmation">Changes saved!</span>
+            </div>
+          `;
+
+        // Add toggle functionality
+        const toggleBtn = resultElement.querySelector(".editor-toggle-btn");
+        const markdownView = resultElement.querySelector(".markdown-view");
+        const editableView = resultElement.querySelector(".editable-content");
+
+        toggleBtn.addEventListener("click", () => {
+          markdownView.classList.toggle("hidden");
+          editableView.classList.toggle("hidden");
+          toggleBtn.textContent = markdownView.classList.contains("hidden")
+            ? "Preview"
+            : "Edit";
+        });
+
+        // Initially hide the editable view
+        editableView.classList.add("hidden");
+
         resultElement.parentElement.classList.remove("hidden");
       }
 
@@ -447,11 +543,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const feedbackSection = document.getElementById("feedback-section");
 
     if (startButton) {
-      startButton.disabled = agentSystem.workflow.started;
+      startButton.disabled =
+        agentSystem.workflow.started && !agentSystem.workflow.completed;
 
       // Update the text of the button
-      if (agentSystem.workflow.started) {
+      if (agentSystem.workflow.started && !agentSystem.workflow.completed) {
         startButton.textContent = "Processing...";
+      } else if (agentSystem.workflow.completed) {
+        startButton.textContent = "Start New Analysis";
       } else {
         startButton.textContent = "Start Analysis with AI Agents";
       }
@@ -499,15 +598,65 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (resultElement) {
+      let outputContent = "";
+
       if (typeof result === "object") {
         if (result.output) {
-          resultElement.textContent = result.output;
+          outputContent = result.output;
         } else {
-          resultElement.textContent = JSON.stringify(result, null, 2);
+          outputContent = JSON.stringify(result, null, 2);
         }
       } else {
-        resultElement.textContent = result || "No result data available";
+        outputContent = result || "No result data available";
       }
+
+      // Check if we have an edited version of this content
+      if (agentSystem.workflow.editedResults[step]) {
+        outputContent = agentSystem.workflow.editedResults[step];
+      }
+
+      // Create editable content area with markdown preview
+      resultElement.innerHTML = `
+          <div class="markdown-view">${md.render(outputContent)}</div>
+          <div id="modal-${step}-editable" class="editable-content" contenteditable="true">${outputContent}</div>
+          <div class="editor-controls">
+            <button class="btn editor-toggle-btn">Toggle Editor</button>
+            <button class="btn editor-save-btn" id="modal-save-btn">Save Changes</button>
+            <span id="modal-save-confirmation" class="save-confirmation">Changes saved!</span>
+          </div>
+        `;
+
+      // Add toggle functionality
+      const toggleBtn = resultElement.querySelector(".editor-toggle-btn");
+      const markdownView = resultElement.querySelector(".markdown-view");
+      const editableView = resultElement.querySelector(".editable-content");
+
+      toggleBtn.addEventListener("click", () => {
+        markdownView.classList.toggle("hidden");
+        editableView.classList.toggle("hidden");
+        toggleBtn.textContent = markdownView.classList.contains("hidden")
+          ? "Preview"
+          : "Edit";
+      });
+
+      // Add save functionality
+      const saveBtn = resultElement.querySelector("#modal-save-btn");
+      saveBtn.addEventListener("click", () => {
+        const content = editableView.innerText;
+        agentSystem.workflow.editedResults[step] = content;
+        markdownView.innerHTML = md.render(content);
+
+        const saveConfirm = resultElement.querySelector(
+          "#modal-save-confirmation"
+        );
+        saveConfirm.classList.add("visible");
+        setTimeout(() => {
+          saveConfirm.classList.remove("visible");
+        }, 2000);
+      });
+
+      // Initially hide the editable view
+      editableView.classList.add("hidden");
     }
 
     if (approveButton) {
@@ -615,6 +764,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Make saveEditedResult available globally
+  window.saveEditedResult = saveEditedResult;
+
   // Resize handler for connections
   window.addEventListener("resize", () => {
     drawAgentConnections();
@@ -624,6 +776,19 @@ document.addEventListener("DOMContentLoaded", () => {
   function init() {
     // Initialize socket
     initSocket();
+
+    // Load necessary libraries
+    loadExternalScript(
+      "https://cdn.jsdelivr.net/npm/markdown-it@12.0.6/dist/markdown-it.min.js",
+      () => {
+        loadExternalScript(
+          "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.0/build/highlight.min.js",
+          () => {
+            console.log("Markdown and highlighting libraries loaded");
+          }
+        );
+      }
+    );
 
     // Set up event listeners
     const startButton = document.getElementById("agent-start-btn");
@@ -658,6 +823,14 @@ document.addEventListener("DOMContentLoaded", () => {
     updateUI();
 
     console.log("Agent interface initialized");
+  }
+
+  // Helper function to load external scripts
+  function loadExternalScript(url, callback) {
+    const script = document.createElement("script");
+    script.src = url;
+    script.onload = callback;
+    document.head.appendChild(script);
   }
 
   // Initialize when document is ready
