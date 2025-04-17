@@ -15,6 +15,14 @@ module.exports = {
   },
 
   /**
+   * Get the agent manager instance
+   * @returns {Object} - Agent manager instance
+   */
+  getAgentManager() {
+    return agentManager;
+  },
+
+  /**
    * Start a new agent session
    * @param {string} sessionId - Optional session ID
    * @returns {string} - Active session ID
@@ -79,7 +87,7 @@ module.exports = {
   /**
    * Submit user feedback
    * @param {string} feedback - User feedback
-   * @param {Object} explanationResult - The explanation that was presented
+   * @param {Object} explanationResult - Final explanation presented to user
    * @returns {Promise<Object>} - Feedback processing results
    */
   async submitFeedback(feedback, explanationResult) {
@@ -109,5 +117,30 @@ module.exports = {
    */
   getProcessingHistory() {
     return agentManager.getProcessingHistory();
+  },
+
+  /**
+   * Get agent thinking process
+   * @param {string} sessionId - Session ID
+   * @param {string} agentKey - Agent key
+   * @returns {string|null} - Thinking process or null if not found
+   */
+  getAgentThinking(sessionId, agentKey) {
+    return agentManager.getAgentThinking(sessionId, agentKey);
+  },
+
+  /**
+   * Request workflow termination
+   * @param {string} sessionId - Session ID
+   * @param {string} rejectedStep - Step that was rejected
+   * @param {string} reason - Reason for termination
+   * @returns {Promise<boolean>} - Success status
+   */
+  async requestTermination(sessionId, rejectedStep, reason) {
+    return await agentManager.requestTermination(
+      sessionId,
+      rejectedStep,
+      reason
+    );
   },
 };

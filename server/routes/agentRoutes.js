@@ -37,4 +37,14 @@ router.get(
   agentController.getPendingStepDetails
 );
 
+// New route for getting agent thinking process
+router.get(
+  "/thinking/:sessionId/:agentKey",
+  helpers.authenticateToken,
+  agentController.getAgentThinking
+);
+
+// New route for rejecting a step and terminating workflow
+router.post("/reject", helpers.authenticateToken, agentController.rejectStep);
+
 module.exports = router;

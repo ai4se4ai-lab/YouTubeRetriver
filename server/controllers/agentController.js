@@ -81,27 +81,86 @@ module.exports = {
       // Get the resolver function and original result
       const { resolve, result } = pendingApprovals.get(sessionId).get(step);
 
+      // Create a copy of the result to avoid reference issues
+      const approvedResult = JSON.parse(JSON.stringify(result));
+
       // If there's edited content, update the result
       if (editedContent) {
-        if (result && result.result) {
-          result.result.output = editedContent;
+        if (approvedResult && approvedResult.result) {
+          approvedResult.result.output = editedContent;
+          console.log(`Updated content for ${step} with edited version`);
         }
       }
 
       // Remove from pending map
       pendingApprovals.get(sessionId).delete(step);
 
-      // Resolve the promise to continue processing
-      resolve(result);
+      // Resolve the promise to continue processing with the potentially modified result
+      resolve(approvedResult);
 
       res.json({
         success: true,
-        message: `Step ${step} approved, processing continuing`,
+        message: `Step ${step} approved, processing continuing with ${
+          editedContent ? "edited" : "original"
+        } content`,
       });
     } catch (error) {
       console.error("Error approving step:", error);
       res.status(500).json({
         error: "Failed to approve step",
+        message: error.message,
+      });
+    }
+  },
+
+  /**
+   * Reject a step and terminate the workflow
+   */
+  async rejectStep(req, res) {
+    try {
+      const { sessionId, step } = req.body;
+
+      if (!sessionId || !step) {
+        return res
+          .status(400)
+          .json({ error: "Session ID and step are required" });
+      }
+
+      // Get the agent manager
+      const agentManager = agentService.getAgentManager();
+
+      // Request termination
+      const terminationResult = await agentManager.requestTermination(
+        sessionId,
+        step,
+        "User rejected the results"
+      );
+
+      // Remove from pending approvals if exists
+      if (
+        pendingApprovals.has(sessionId) &&
+        pendingApprovals.get(sessionId).has(step)
+      ) {
+        pendingApprovals.get(sessionId).delete(step);
+      }
+
+      // Notify all clients subscribed to this session
+      io.to(sessionId).emit("workflowTerminated", {
+        reason: "User rejected results",
+        step,
+        message: "Workflow terminated because results were rejected.",
+        alertUser: false,
+      });
+
+      res.json({
+        success: true,
+        message: "Workflow termination requested",
+        result: terminationResult,
+      });
+    } catch (error) {
+      console.error("Error rejecting step:", error);
+      res.status(500).json({
+        error: "Failed to reject step",
         message: error.message,
       });
     }
@@ -214,6 +273,39 @@ module.exports = {
   },
 
   /**
+   * Get agent thinking process
+   */
+  async getAgentThinking(req, res) {
+    try {
+      const { sessionId, agentKey } = req.params;
+
+      // Get the agent manager
+      const agentManager = agentService.getAgentManager();
+
+      // Get thinking process from the manager
+      const thinking = agentManager.getAgentThinking(sessionId, agentKey);
+
+      if (!thinking) {
+        return res.status(404).json({
+          error: "No thinking process found for this agent",
+        });
+      }
+
+      res.json({
+        success: true,
+        agent: agentKey,
+        thinking,
+      });
+    } catch (error) {
+      console.error("Error getting agent thinking:", error);
+      res.status(500).json({
+        error: "Failed to get agent thinking",
+        message: error.message,
+      });
+    }
+  },
+
+  /**
    * Set up WebSocket handlers
    * @param {Object} io - Socket.IO instance
    */
@@ -240,22 +332,57 @@ module.exports = {
           // Get the resolver function and result
           const { resolve, result } = pendingApprovals.get(sessionId).get(step);
 
+          // Create a copy of the result to avoid reference issues
+          const approvedResult = JSON.parse(JSON.stringify(result));
+
           // If there's edited content, update the result
           if (editedContent) {
-            if (result && result.result) {
-              result.result.output = editedContent;
+            if (approvedResult && approvedResult.result) {
+              approvedResult.result.output = editedContent;
+              console.log(
+                `Updated content for ${step} with edited version via socket`
+              );
             }
           }
 
           // Remove from pending map
           pendingApprovals.get(sessionId).delete(step);
 
-          // Resolve the promise to continue processing
-          resolve(result);
+          // Resolve the promise to continue processing with the potentially modified result
+          resolve(approvedResult);
 
           // Notify all clients subscribed to this session
-          io.to(sessionId).emit("stepApproved", { step });
+          io.to(sessionId).emit("stepApproved", {
+            step,
+            wasEdited: !!editedContent,
+          });
         }
+      });
+
+      // Listen for step rejection
+      socket.on("rejectStep", (data) => {
+        const { sessionId, step } = data;
+
+        // Call the reject handler directly
+        this.rejectStep(
+          {
+            body: { sessionId, step },
+          },
+          {
+            json: (response) => {
+              console.log("Step rejection processed via socket:", response);
+            },
+            status: (code) => ({
+              json: (error) => {
+                console.error(
+                  `Error processing step rejection via socket: ${code}`,
+                  error
+                );
+                socket.emit("error", error);
+              },
+            }),
+          }
+        );
       });
 
       // Listen for feedback submission
@@ -270,7 +397,7 @@ module.exports = {
           );
 
           if (explanationResult) {
-            // Process feedback and update status
+            // Show that feedback processing is starting
             io.to(sessionId).emit("processingStep", {
               step: "userFeedback",
               status: "starting",
@@ -284,10 +411,27 @@ module.exports = {
 
             // Emit results to all clients subscribed to this session
             io.to(sessionId).emit("feedbackProcessed", { results });
+
+            // Also notify about the Learning agent starting
+            io.to(sessionId).emit("processingStep", {
+              step: "learning",
+              status: "starting",
+            });
           }
         } catch (error) {
           console.error("Error processing socket feedback:", error);
           socket.emit("error", { message: error.message });
+        }
+      });
+
+      // Listen for orchestrator updates from clients
+      socket.on("orchestratorUpdate", (data) => {
+        if (data.sessionId) {
+          // Forward the update to all clients in the session
+          io.to(data.sessionId).emit("orchestratorUpdate", {
+            timestamp: new Date().toISOString(),
+            message: data.message,
+          });
         }
       });
 
@@ -309,6 +453,37 @@ module.exports = {
         "processingStep",
         stepInfo
       );
+    });
+
+    // Add listener for agent thinking updates
+    agentManager.on("agentThinking", (data) => {
+      if (data.sessionId) {
+        io.to(data.sessionId).emit("agentThinking", {
+          agent: data.agent,
+          thinking: data.thinking,
+        });
+      }
+    });
+
+    // Add listener for orchestrator updates
+    agentManager.on("orchestratorUpdate", (update) => {
+      io.to(agentManager.getCurrentState().sessionId).emit(
+        "orchestratorUpdate",
+        update
+      );
+    });
+
+    // Add listener for workflow termination
+    agentManager.on("workflowTerminated", (data) => {
+      if (data.sessionId) {
+        io.to(data.sessionId).emit("workflowTerminated", {
+          reason: data.reason,
+          rejectedStep: data.rejectedStep,
+          message: data.message || "Workflow terminated by user request",
+          alertUser: data.alertUser || false,
+          timestamp: data.timestamp,
+        });
+      }
     });
 
     agentManager.on("error", (error) => {
