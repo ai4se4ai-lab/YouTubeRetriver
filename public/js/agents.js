@@ -28,6 +28,7 @@ document.addEventListener("DOMContentLoaded", () => {
       currentStep: null,
       pendingApproval: null,
       editedResults: {}, // Store edited results here
+      terminated: false, // Track if workflow was terminated
     },
     orchestrator: {
       messages: [],
@@ -37,42 +38,62 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // Markdown converter
-  const md = window.markdownit({
-    html: true,
-    linkify: true,
-    typographer: true,
-    highlight: function (str, lang) {
-      if (lang && hljs.getLanguage(lang)) {
-        try {
-          return hljs.highlight(lang, str).value;
-        } catch (__) {}
-      }
-      return ""; // use external default escaping
-    },
-  });
+  let md;
+
+  // Initialize markdown when library is loaded
+  function initMarkdown() {
+    if (window.markdownit) {
+      md = window.markdownit({
+        html: true,
+        linkify: true,
+        typographer: true,
+        highlight: function (str, lang) {
+          if (lang && window.hljs && window.hljs.getLanguage(lang)) {
+            try {
+              return window.hljs.highlight(lang, str).value;
+            } catch (__) {}
+          }
+          return ""; // use external default escaping
+        },
+      });
+    } else {
+      console.warn("markdown-it library not loaded, using plaintext for now");
+      // Simple fallback if markdown isn't loaded
+      md = {
+        render: function (text) {
+          return `<p>${text}</p>`;
+        },
+      };
+    }
+  }
 
   // Initialize socket connection
   function initSocket() {
-    agentSystem.socket = io();
+    if (typeof io !== "undefined") {
+      agentSystem.socket = io();
 
-    // Socket event listeners
-    agentSystem.socket.on("connect", () => {
-      console.log("Socket connected");
-      updateUI();
-    });
+      // Socket event listeners
+      agentSystem.socket.on("connect", () => {
+        console.log("Socket connected");
+        updateUI();
+      });
 
-    agentSystem.socket.on("disconnect", () => {
-      console.log("Socket disconnected");
-      updateUI();
-    });
+      agentSystem.socket.on("disconnect", () => {
+        console.log("Socket disconnected");
+        updateUI();
+      });
 
-    // Subscribe to session events
-    agentSystem.socket.on("stateUpdate", handleStateUpdate);
-    agentSystem.socket.on("processingStep", handleProcessingStep);
-    agentSystem.socket.on("stepApproved", handleStepApproved);
-    agentSystem.socket.on("feedbackProcessed", handleFeedbackProcessed);
-    agentSystem.socket.on("orchestratorUpdate", handleOrchestratorUpdate);
-    agentSystem.socket.on("error", handleError);
+      // Subscribe to session events
+      agentSystem.socket.on("stateUpdate", handleStateUpdate);
+      agentSystem.socket.on("processingStep", handleProcessingStep);
+      agentSystem.socket.on("stepApproved", handleStepApproved);
+      agentSystem.socket.on("feedbackProcessed", handleFeedbackProcessed);
+      agentSystem.socket.on("orchestratorUpdate", handleOrchestratorUpdate);
+      agentSystem.socket.on("error", handleError);
+    } else {
+      console.error("Socket.io not loaded! Please check network connection");
+      setTimeout(initSocket, 1000); // Try again in 1 second
+    }
   }
 
   // Event handlers for socket events
@@ -134,9 +155,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }. Proceeding to next step.`
       );
 
-      // If this was the explanation agent, automatically display the feedback form
+      // If this was the explanation agent, automatically display the feedback modal
       if (data.step === "explanation") {
-        document.getElementById("feedback-section").classList.remove("hidden");
+        setTimeout(() => {
+          showFeedbackModal();
+        }, 1000); // Small delay to ensure UI updates first
       }
     }
 
@@ -157,6 +180,9 @@ document.addEventListener("DOMContentLoaded", () => {
       addOrchestratorMessage(
         "Feedback successfully processed and analyzed by learning agent."
       );
+
+      // Show final results modal
+      showFinalResultsModal();
     }
 
     updateUI();
@@ -211,18 +237,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Reset agent statuses
-      for (const agent in agentSystem.agents) {
-        agentSystem.agents[agent].status = "idle";
-        agentSystem.agents[agent].result = null;
-      }
+      // Reset agent system state
+      resetAgentSystem();
 
-      // Clear edited results
-      agentSystem.workflow.editedResults = {};
-
-      // Reset orchestrator messages
-      agentSystem.orchestrator.messages = [];
-      addOrchestratorMessage("Initializing agent system workflow...");
+      // Initialize markdown if not already done
+      if (!md) initMarkdown();
 
       // Show agent system
       document.getElementById("agent-system").classList.remove("hidden");
@@ -276,6 +295,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Reset agent system to initial state
+  function resetAgentSystem() {
+    // Reset agent statuses
+    for (const agent in agentSystem.agents) {
+      agentSystem.agents[agent].status = "idle";
+      agentSystem.agents[agent].result = null;
+    }
+
+    // Clear edited results
+    agentSystem.workflow.editedResults = {};
+    agentSystem.workflow.terminated = false;
+
+    // Reset orchestrator messages
+    agentSystem.orchestrator.messages = [];
+    addOrchestratorMessage("Initializing agent system workflow...");
+  }
+
   // Poll for status updates
   let statusPollInterval = null;
   function startStatusPolling() {
@@ -289,7 +325,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (
         !agentSystem.sessionId ||
         !agentSystem.workflow.started ||
-        agentSystem.workflow.completed
+        agentSystem.workflow.completed ||
+        agentSystem.workflow.terminated
       ) {
         clearInterval(statusPollInterval);
         return;
@@ -437,6 +474,57 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Reject and terminate a step
+  async function rejectStep(step) {
+    try {
+      // Mark workflow as terminated
+      agentSystem.workflow.terminated = true;
+
+      // Send termination to server
+      const response = await fetch("/api/agents/terminate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${auth.getAccessToken()}`,
+        },
+        body: JSON.stringify({
+          sessionId: agentSystem.sessionId,
+          step: step,
+          reason: "User rejected output",
+        }),
+      });
+
+      hideApprovalModal();
+
+      // Add orchestrator message
+      addOrchestratorMessage(
+        `${step} was rejected by user. Workflow has been terminated.`,
+        true
+      );
+
+      // Update UI to show terminated state
+      agentSystem.agents[step].status = "error";
+      agentSystem.workflow.pendingApproval = null;
+
+      // Stop status polling
+      if (statusPollInterval) {
+        clearInterval(statusPollInterval);
+        statusPollInterval = null;
+      }
+
+      // Show final results with what we have so far
+      showFinalResultsModal(true);
+
+      updateUI();
+    } catch (error) {
+      console.error("Error rejecting step:", error);
+      alert(`Failed to reject step: ${error.message}`);
+
+      // Add error to orchestrator
+      addOrchestratorMessage(`Error rejecting step: ${error.message}`, true);
+    }
+  }
+
   // Update orchestrator status
   function updateOrchestratorStatus(status) {
     const orchestratorCard = document.getElementById("orchestrator-card");
@@ -557,7 +645,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function submitFeedback() {
     try {
       const feedbackText = document
-        .getElementById("feedback-text")
+        .getElementById("feedback-modal-text")
         .value.trim();
 
       if (!feedbackText) {
@@ -565,13 +653,51 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      // Check if user wants to terminate the process
+      const terminationPhrases = [
+        "terminate the process",
+        "finish it",
+        "i am done",
+        "end process",
+        "stop it",
+        "that's enough",
+        "that's all",
+        "i'm finished",
+      ];
+
+      const feedbackLower = feedbackText.toLowerCase();
+      const isTerminating = terminationPhrases.some((phrase) =>
+        feedbackLower.includes(phrase)
+      );
+
+      if (isTerminating) {
+        // User wants to terminate - just show final results
+        hideFeedbackModal();
+
+        // Mark feedback and learning agents as completed to show final state
+        agentSystem.agents.userFeedback.status = "completed";
+        agentSystem.agents.learning.status = "completed";
+
+        // Add orchestrator message
+        addOrchestratorMessage(
+          "User chose to terminate process. Showing final results."
+        );
+
+        updateUI();
+        showFinalResultsModal();
+        return;
+      }
+
       // Update UI first to show processing state
-      document.getElementById("feedback-submit-btn").disabled = true;
-      document.getElementById("feedback-status").textContent =
+      document.getElementById("feedback-modal-submit").disabled = true;
+      document.getElementById("feedback-modal-status").textContent =
         "Processing feedback...";
       agentSystem.agents.userFeedback.status = "processing";
       addOrchestratorMessage("Processing user feedback. Analyzing content...");
       updateUI();
+
+      // Hide the feedback modal while processing
+      hideFeedbackModal();
 
       const response = await fetch("/api/agents/feedback", {
         method: "POST",
@@ -596,12 +722,6 @@ document.addEventListener("DOMContentLoaded", () => {
         feedback: feedbackText,
       });
 
-      // Update UI
-      document.getElementById("feedback-text").value = "";
-      document.getElementById("feedback-submit-btn").disabled = true;
-      document.getElementById("feedback-status").textContent =
-        "Feedback submitted, processing...";
-
       // Add orchestrator message
       addOrchestratorMessage(
         "User feedback submitted. Learning agent is analyzing patterns."
@@ -611,10 +731,14 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {
       console.error("Error submitting feedback:", error);
       alert(`Failed to submit feedback: ${error.message}`);
+
       // Reset UI state
-      document.getElementById("feedback-submit-btn").disabled = false;
-      document.getElementById("feedback-status").textContent =
+      document.getElementById("feedback-modal-submit").disabled = false;
+      document.getElementById("feedback-modal-status").textContent =
         "Failed to submit feedback.";
+
+      // Reshow feedback modal if there was an error
+      showFeedbackModal();
 
       // Add error to orchestrator
       addOrchestratorMessage(
@@ -622,6 +746,180 @@ document.addEventListener("DOMContentLoaded", () => {
         true
       );
     }
+  }
+
+  // Show feedback modal
+  function showFeedbackModal() {
+    const modal = document.getElementById("feedback-modal");
+    if (!modal) {
+      console.error("Feedback modal not found in DOM");
+      return;
+    }
+
+    // Enable the submit button if there's text
+    const feedbackText = document.getElementById("feedback-modal-text");
+    const submitBtn = document.getElementById("feedback-modal-submit");
+
+    if (feedbackText && submitBtn) {
+      feedbackText.value = ""; // Clear previous feedback
+      submitBtn.disabled = true;
+
+      feedbackText.addEventListener("input", function () {
+        submitBtn.disabled = this.value.trim() === "";
+      });
+    }
+
+    // Reset status message
+    const statusElement = document.getElementById("feedback-modal-status");
+    if (statusElement) {
+      statusElement.textContent = "";
+    }
+
+    // Show the modal
+    modal.classList.add("active");
+
+    // Add orchestrator message
+    addOrchestratorMessage("Waiting for user feedback. Modal displayed.");
+  }
+
+  // Hide feedback modal
+  function hideFeedbackModal() {
+    const modal = document.getElementById("feedback-modal");
+    if (modal) {
+      modal.classList.remove("active");
+    }
+  }
+
+  // Show final results modal
+  // Modify showFinalResultsModal function to ensure it properly extracts analogies
+  function showFinalResultsModal(wasTerminated = false) {
+    const modal = document.getElementById("final-results-modal");
+    if (!modal) {
+      console.error("Final results modal not found in DOM");
+      return;
+    }
+
+    // Get the final explanation result
+    const explanationResult = agentSystem.agents.explanation.result;
+
+    // Format the content for the modal
+    const resultContent = document.getElementById("final-results-content");
+    if (resultContent) {
+      if (wasTerminated) {
+        resultContent.innerHTML = `
+        <div class="termination-notice">
+          <p><strong>Process was terminated early.</strong></p>
+          <p>Here are the results based on the completed steps:</p>
+        </div>
+      `;
+
+        // Add whatever results we have so far
+        if (explanationResult && explanationResult.output) {
+          resultContent.innerHTML += md.render(
+            extractAnalogiesForDisplay(explanationResult.output)
+          );
+        } else {
+          resultContent.innerHTML +=
+            "<p>No final results were generated before termination.</p>";
+        }
+      } else {
+        // Show full results
+        if (explanationResult && explanationResult.output) {
+          resultContent.innerHTML = md.render(
+            extractAnalogiesForDisplay(explanationResult.output)
+          );
+        } else {
+          resultContent.innerHTML =
+            "<p>No results were generated. There may have been an error in processing.</p>";
+        }
+      }
+    }
+
+    // Show the modal
+    modal.classList.add("active");
+
+    // Add orchestrator message
+    addOrchestratorMessage("Displaying final results to user.");
+
+    // Update UI to show workflow as completed
+    agentSystem.workflow.completed = true;
+    updateOrchestratorStatus("completed");
+    updateUI();
+  }
+
+  // Improve extractAnalogiesForDisplay function to better extract just the analogies
+  function extractAnalogiesForDisplay(output) {
+    // This function processes the explanation output to extract just the analogies
+    // for a cleaner final display
+
+    // First, try to find a section that has analogies
+    const analogySections = [
+      "## Analogies",
+      "# Analogies",
+      "### Analogies",
+      "Analogies:",
+      "Here are the analogies",
+      "YouTube Interest Analogies",
+    ];
+
+    let cleanOutput = output;
+
+    // Look for analogy section markers
+    for (const section of analogySections) {
+      const index = output.indexOf(section);
+      if (index !== -1) {
+        // Found a section, extract from there
+        cleanOutput = output.substring(index);
+        break;
+      }
+    }
+
+    // If we couldn't find a clear section, just return what we have
+    // but with a better title
+    if (cleanOutput === output) {
+      return "# YouTube Interest Analogies\n\n" + cleanOutput;
+    }
+
+    return "# YouTube Interest Analogies\n\n" + cleanOutput;
+  }
+
+  // Hide final results modal
+  function hideFinalResultsModal() {
+    const modal = document.getElementById("final-results-modal");
+    if (modal) {
+      modal.classList.remove("active");
+    }
+  }
+
+  // Extract analogies for display
+  function extractAnalogiesForDisplay(output) {
+    // This function processes the explanation output to extract just the analogies
+    // for a cleaner final display
+
+    // First, try to find a section that has analogies
+    const analogySections = [
+      "## Analogies",
+      "# Analogies",
+      "### Analogies",
+      "Analogies:",
+      "Here are the analogies",
+    ];
+
+    let cleanOutput = output;
+
+    // Look for analogy section markers
+    for (const section of analogySections) {
+      const index = output.indexOf(section);
+      if (index !== -1) {
+        // Found a section, extract from there
+        cleanOutput = output.substring(index);
+        break;
+      }
+    }
+
+    // If we couldn't find a clear section, just return what we have
+    // but with a better title
+    return "# YouTube Interest Analogies\n\n" + cleanOutput;
   }
 
   // Save edited result
@@ -725,7 +1023,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Create editable content area
         resultElement.innerHTML = `
-            <div class="markdown-view">${md.render(outputContent)}</div>
+            <div class="markdown-view">${
+              md ? md.render(outputContent) : `<p>${outputContent}</p>`
+            }</div>
             <div id="${agentKey}-editable" class="editable-content" contenteditable="true">${outputContent}</div>
             <div class="editor-controls">
               <button class="btn editor-toggle-btn">Toggle Editor</button>
@@ -773,13 +1073,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (startButton) {
       startButton.disabled =
-        agentSystem.workflow.started && !agentSystem.workflow.completed;
+        agentSystem.workflow.started &&
+        !agentSystem.workflow.completed &&
+        !agentSystem.workflow.terminated;
 
       // Update the text of the button
-      if (agentSystem.workflow.started && !agentSystem.workflow.completed) {
+      if (
+        agentSystem.workflow.started &&
+        !agentSystem.workflow.completed &&
+        !agentSystem.workflow.terminated
+      ) {
         startButton.textContent = "Processing...";
-      } else if (agentSystem.workflow.completed) {
+      } else if (
+        agentSystem.workflow.completed ||
+        agentSystem.workflow.terminated
+      ) {
         startButton.textContent = "Start New Analysis";
+        startButton.disabled = false;
       } else {
         startButton.textContent = "Start Analysis with AI Agents";
       }
@@ -787,23 +1097,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Show feedback section when explanation is completed
     if (feedbackSection) {
-      if (agentSystem.agents.explanation.status === "completed") {
-        feedbackSection.classList.remove("hidden");
-
-        // Enable feedback submit button
-        const feedbackText = document.getElementById("feedback-text");
-        const feedbackSubmitBtn = document.getElementById(
-          "feedback-submit-btn"
-        );
-
-        if (feedbackText && feedbackSubmitBtn) {
-          feedbackText.addEventListener("input", () => {
-            feedbackSubmitBtn.disabled = feedbackText.value.trim() === "";
-          });
-        }
-      } else {
-        feedbackSection.classList.add("hidden");
-      }
+      feedbackSection.classList.add("hidden"); // Hide the inline feedback section since we're using a modal now
     }
 
     // Draw connections between agents
@@ -819,6 +1113,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const titleElement = modal.querySelector(".approval-title");
     const resultElement = modal.querySelector(".approval-result");
     const approveButton = modal.querySelector(".approve-button");
+    const rejectButton = modal.querySelector(".reject-button");
 
     if (titleElement) {
       titleElement.textContent = `Approve results from ${step
@@ -846,7 +1141,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Create editable content area with markdown preview
       resultElement.innerHTML = `
-          <div class="markdown-view">${md.render(outputContent)}</div>
+          <div class="markdown-view">${
+            md ? md.render(outputContent) : `<p>${outputContent}</p>`
+          }</div>
           <div id="modal-${step}-editable" class="editable-content" contenteditable="true">${outputContent}</div>
           <div class="editor-controls">
             <button class="btn editor-toggle-btn">Toggle Editor</button>
@@ -873,7 +1170,7 @@ document.addEventListener("DOMContentLoaded", () => {
       saveBtn.addEventListener("click", () => {
         const content = editableView.innerText;
         agentSystem.workflow.editedResults[step] = content;
-        markdownView.innerHTML = md.render(content);
+        markdownView.innerHTML = md ? md.render(content) : `<p>${content}</p>`;
 
         const saveConfirm = resultElement.querySelector(
           "#modal-save-confirmation"
@@ -895,6 +1192,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (approveButton) {
       approveButton.onclick = () => approveStep(step);
+    }
+
+    if (rejectButton) {
+      rejectButton.onclick = () => rejectStep(step);
     }
 
     // Show modal
@@ -1066,8 +1367,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Make saveEditedResult available globally
+  // Make functions available globally
   window.saveEditedResult = saveEditedResult;
+  window.startAgentProcessing = startAgentProcessing;
+  window.submitFeedback = submitFeedback;
+  window.showThinkingProcess = true;
+  window.hideFeedbackModal = hideFeedbackModal;
+  window.hideFinalResultsModal = hideFinalResultsModal;
 
   // Resize handler for connections
   window.addEventListener("resize", () => {
@@ -1079,28 +1385,13 @@ document.addEventListener("DOMContentLoaded", () => {
     // Initialize socket
     initSocket();
 
-    // Load necessary libraries
-    loadExternalScript(
-      "https://cdn.jsdelivr.net/npm/markdown-it@12.0.6/dist/markdown-it.min.js",
-      () => {
-        loadExternalScript(
-          "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.0/build/highlight.min.js",
-          () => {
-            console.log("Markdown and highlighting libraries loaded");
-          }
-        );
-      }
-    );
+    // Initialize markdown
+    initMarkdown();
 
     // Set up event listeners
     const startButton = document.getElementById("agent-start-btn");
     if (startButton) {
       startButton.addEventListener("click", startAgentProcessing);
-    }
-
-    const feedbackSubmitBtn = document.getElementById("feedback-submit-btn");
-    if (feedbackSubmitBtn) {
-      feedbackSubmitBtn.addEventListener("click", submitFeedback);
     }
 
     // Set up result toggles
@@ -1112,27 +1403,29 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Close modal when clicking outside
-    const modal = document.getElementById("approval-modal");
-    if (modal) {
+    const modals = document.querySelectorAll(
+      ".modal, .approval-modal, .feedback-modal, .final-results-modal"
+    );
+    modals.forEach((modal) => {
       modal.addEventListener("click", function (e) {
         if (e.target === this) {
-          hideApprovalModal();
+          if (this.classList.contains("approval-modal")) {
+            hideApprovalModal();
+          } else if (this.classList.contains("feedback-modal")) {
+            hideFeedbackModal();
+          } else if (this.classList.contains("final-results-modal")) {
+            hideFinalResultsModal();
+          } else {
+            this.style.display = "none";
+          }
         }
       });
-    }
+    });
 
     // Initialize UI
     updateUI();
 
     console.log("Agent interface initialized");
-  }
-
-  // Helper function to load external scripts
-  function loadExternalScript(url, callback) {
-    const script = document.createElement("script");
-    script.src = url;
-    script.onload = callback;
-    document.head.appendChild(script);
   }
 
   // Initialize when document is ready

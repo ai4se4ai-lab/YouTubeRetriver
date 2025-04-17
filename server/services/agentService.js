@@ -96,6 +96,41 @@ module.exports = {
   },
 
   /**
+   * Handle workflow termination
+   * @param {string} sessionId - The session ID
+   * @param {Object} terminationData - Information about the termination
+   * @returns {Promise<Object>} - Termination handling result
+   */
+  async handleTermination(sessionId, terminationData) {
+    try {
+      // Get the orchestrator agent
+      const orchestrator = agentManager.getAgent("orchestrator");
+
+      if (!orchestrator) {
+        throw new Error("Orchestrator agent not found");
+      }
+
+      // Call the orchestrator to handle termination
+      const result = await orchestrator.handleTermination({
+        sessionId,
+        ...terminationData,
+      });
+
+      // Emit termination event
+      agentManager.emit("terminated", {
+        sessionId,
+        ...terminationData,
+        result,
+      });
+
+      return result;
+    } catch (error) {
+      console.error("Error handling termination:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Get current processing state
    * @returns {Object} - Current state
    */
