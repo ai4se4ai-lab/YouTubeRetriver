@@ -27,7 +27,9 @@
 
             <section id="data-section" class="card hidden">
                 <h2>Data Export & Analysis Options</h2>
+                <!-- YouTube Data Options -->
                 <div class="form-group">
+                    <h3>YouTube Data</h3>
                     <label>
                         <input type="checkbox" id="liked-videos" checked>
                         Liked Videos
@@ -43,6 +45,26 @@
                     <label for="max-results">Maximum results (per category):</label>
                     <input type="number" id="max-results" min="1" max="5000" value="250">
                 </div>
+                
+                <!-- Git Repository Analysis -->
+                <div class="form-group">
+                    <h3>Code Analysis</h3>
+                    <label>
+                        <input type="checkbox" id="git-analysis">
+                        Git Repository Analysis
+                    </label>
+                    <div class="git-repo-details hidden">
+                        <div class="form-group">
+                            <label for="git-repo-url">Repository URL:</label>
+                            <input type="text" id="git-repo-url" placeholder="https://github.com/username/repo.git">
+                        </div>
+                        <div class="form-group">
+                            <label for="git-branch">Branch to analyze:</label>
+                            <input type="text" id="git-branch" placeholder="main">
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="buttons-container">
                     <button id="export-button" class="btn primary">Export Data to CSV</button>
                     <button id="agent-start-btn" class="btn secondary">Analyze with AI Agents</button>
@@ -65,7 +87,7 @@
             <section id="agent-system" class="card hidden agent-system">
                 <div class="agent-system-header">
                     <h2>AI Agent Analysis</h2>
-                    <p>Our intelligent agents are analyzing your YouTube data to generate personalized insights</p>
+                    <p>Our intelligent agents are analyzing your data to generate personalized insights</p>
                 </div>
                 
                 <!-- Data Analysis Layer -->
@@ -74,9 +96,34 @@
                         <span>Data Analysis Layer</span>
                     </div>
                     <div class="layer-description">
-                        These agents process your YouTube data to extract patterns and retrieve relevant information
+                        These agents process your data to extract patterns and retrieve relevant information
                     </div>
                     <div class="agent-cards">
+                        <!-- Git Analysis Agent -->
+                        <div class="agent-card idle" id="gitAnalysis-card">
+                            <div class="agent-header">
+                                <div class="agent-name">Git Analysis Agent</div>
+                                <div class="agent-status idle">Idle</div>
+                            </div>
+                            <div class="agent-description">
+                                Analyzes Git repository changes to detect potential issues and extract relevant context
+                            </div>
+                            <div class="agent-progress">
+                                <div class="agent-progress-bar"></div>
+                            </div>
+                            <div class="agent-details">
+                                <span class="agent-id">A20</span>
+                                <span class="agent-time"></span>
+                            </div>
+                            <div class="agent-action-buttons">
+                                <button class="btn approve-button hidden">Approve</button>
+                            </div>
+                            <div class="agent-result-container hidden">
+                                <div class="agent-result"></div>
+                                <span class="agent-result-toggle">Show More</span>
+                            </div>
+                        </div>
+                        
                         <!-- Content Analysis Agent -->
                         <div class="agent-card idle" id="contentAnalysis-card">
                             <div class="agent-header">
@@ -383,6 +430,7 @@
                 <li>View your YouTube account</li>
                 <li>See your liked videos</li>
                 <li>Access your watch history</li>
+                <li>If Git Analysis is enabled, analyze repositories you specify</li>
             </ul>
             <p>You can revoke access at any time by visiting your <a href="https://myaccount.google.com/permissions" target="_blank">Google Account Permissions</a>.</p>
         </div>

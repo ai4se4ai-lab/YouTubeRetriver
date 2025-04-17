@@ -7,6 +7,7 @@ const EventEmitter = require("events");
 // Import all agents
 const contentAnalysisAgent = require("./dal/ContentAnalysisAgent");
 const knowledgeRetrievalAgent = require("./dal/KnowledgeRetrievalAgent");
+const gitAnalysisAgent = require("./dal/GitAnalysisAgent"); // Add Git Analysis Agent
 const analogyGenerationAgent = require("./arl/AnalogyGenerationAgent");
 const analogyValidationAgent = require("./arl/AnalogyValidationAgent");
 const analogyRefinementAgent = require("./arl/AnalogyRefinementAgent");
@@ -21,6 +22,7 @@ class AgentManager extends EventEmitter {
     this.agents = {
       contentAnalysis: contentAnalysisAgent,
       knowledgeRetrieval: knowledgeRetrievalAgent,
+      gitAnalysis: gitAnalysisAgent, // Add Git Analysis Agent
       analogyGeneration: analogyGenerationAgent,
       analogyValidation: analogyValidationAgent,
       analogyRefinement: analogyRefinementAgent,
@@ -65,6 +67,15 @@ class AgentManager extends EventEmitter {
   }
 
   /**
+   * Get a specific agent by key
+   * @param {string} agentKey - The agent key
+   * @returns {Object|null} - The agent or null if not found
+   */
+  getAgent(agentKey) {
+    return this.agents[agentKey] || null;
+  }
+
+  /**
    * Get processing history
    * @returns {Array} - Processing history
    */
@@ -78,6 +89,18 @@ class AgentManager extends EventEmitter {
    */
   getCurrentState() {
     return this.currentState;
+  }
+
+  /**
+   * Get agent statuses
+   * @returns {Object} - Status of all agents
+   */
+  getAgentStatuses() {
+    const statuses = {};
+    for (const [key, agent] of Object.entries(this.agents)) {
+      statuses[key] = agent.getStatus();
+    }
+    return statuses;
   }
 
   /**
@@ -111,9 +134,10 @@ class AgentManager extends EventEmitter {
    * Run the full agent workflow
    * @param {Object} youtubeData - YouTube data to process
    * @param {Function} approvalCallback - Callback for user approval between steps
+   * @param {Object} options - Processing options with enableGitAnalysis flag
    * @returns {Promise<Object>} - Final processing results
    */
-  async runFullWorkflow(youtubeData, approvalCallback) {
+  async runFullWorkflow(youtubeData, approvalCallback, options = {}) {
     // Initialize session if not already done
     if (!this.activeSession) {
       this.initSession();
@@ -132,65 +156,111 @@ class AgentManager extends EventEmitter {
       // Start the orchestrator monitoring
       this.#startOrchestratorMonitoring();
 
-      // Step 1: Content Analysis
-      this.emit("processingStep", {
-        step: "contentAnalysis",
-        status: "starting",
-      });
-      const formattedData = this.agents.contentAnalysis.formatData(youtubeData);
-      const contentAnalysisResult = await this.agents.contentAnalysis.analyze(
-        formattedData
-      );
-      this.updateState("contentAnalysis", contentAnalysisResult);
+      // Step 1 (optional): Git Repository Analysis
+      let gitAnalysisResult = null;
+      if (options && options.enableGitAnalysis) {
+        this.emit("processingStep", {
+          step: "gitAnalysis",
+          status: "starting",
+        });
 
-      // Wait for user approval and get edited content if any
-      const approvedContentAnalysis = await approvalCallback(
-        "contentAnalysis",
-        contentAnalysisResult
-      );
+        gitAnalysisResult = await this.agents.gitAnalysis.analyzeChanges();
+        this.updateState("gitAnalysis", gitAnalysisResult);
 
-      // Create a modified result object that preserves the original structure but with updated content
-      const finalContentAnalysis = this.#mergeEditedContent(
-        contentAnalysisResult,
-        approvedContentAnalysis
-      );
-
-      // Update orchestrator about progress
-      await this.#updateOrchestrator(
-        "Explanation Generation completed, awaiting user feedback"
-      );
-
-      // Step 2: Knowledge Retrieval
-      this.emit("processingStep", {
-        step: "knowledgeRetrieval",
-        status: "starting",
-      });
-
-      // Pass the potentially edited content to the knowledge retrieval agent
-      const knowledgeResult =
-        await this.agents.knowledgeRetrieval.retrieveKnowledge(
-          finalContentAnalysis
+        // Wait for user approval and get edited content if any
+        const approvedGitAnalysis = await approvalCallback(
+          "gitAnalysis",
+          gitAnalysisResult
         );
-      this.updateState("knowledgeRetrieval", knowledgeResult);
 
-      // Wait for user approval and get edited content if any
-      const approvedKnowledgeResult = await approvalCallback(
-        "knowledgeRetrieval",
-        knowledgeResult
-      );
+        // Create a modified result object that preserves the original structure but with updated content
+        const finalGitAnalysis = this.#mergeEditedContent(
+          gitAnalysisResult,
+          approvedGitAnalysis
+        );
 
-      // Merge edited content if any
-      const finalKnowledgeResult = this.#mergeEditedContent(
-        knowledgeResult,
-        approvedKnowledgeResult
-      );
+        // Update orchestrator about progress
+        await this.#updateOrchestrator(
+          "Git Analysis completed, moving to Content Analysis"
+        );
 
-      // Update orchestrator about progress
-      await this.#updateOrchestrator(
-        "Knowledge Retrieval completed, moving to Analogy Generation"
-      );
+        gitAnalysisResult = finalGitAnalysis;
+      }
 
-      // Step 3: Analogy Generation
+      // Step 2: Content Analysis
+      let contentAnalysisResult = null;
+      if (
+        youtubeData &&
+        (youtubeData.likedVideos || youtubeData.watchHistory)
+      ) {
+        this.emit("processingStep", {
+          step: "contentAnalysis",
+          status: "starting",
+        });
+
+        const formattedData =
+          this.agents.contentAnalysis.formatData(youtubeData);
+        contentAnalysisResult = await this.agents.contentAnalysis.analyze(
+          formattedData
+        );
+        this.updateState("contentAnalysis", contentAnalysisResult);
+
+        // Wait for user approval and get edited content if any
+        const approvedContentAnalysis = await approvalCallback(
+          "contentAnalysis",
+          contentAnalysisResult
+        );
+
+        // Create a modified result object that preserves the original structure but with updated content
+        const finalContentAnalysis = this.#mergeEditedContent(
+          contentAnalysisResult,
+          approvedContentAnalysis
+        );
+
+        // Update orchestrator about progress
+        await this.#updateOrchestrator(
+          "Content Analysis completed, moving to Knowledge Retrieval"
+        );
+
+        contentAnalysisResult = finalContentAnalysis;
+      }
+
+      // Step 3: Knowledge Retrieval
+      let knowledgeResult = null;
+      if (contentAnalysisResult) {
+        this.emit("processingStep", {
+          step: "knowledgeRetrieval",
+          status: "starting",
+        });
+
+        // Pass the potentially edited content to the knowledge retrieval agent
+        knowledgeResult =
+          await this.agents.knowledgeRetrieval.retrieveKnowledge(
+            contentAnalysisResult
+          );
+        this.updateState("knowledgeRetrieval", knowledgeResult);
+
+        // Wait for user approval and get edited content if any
+        const approvedKnowledgeResult = await approvalCallback(
+          "knowledgeRetrieval",
+          knowledgeResult
+        );
+
+        // Merge edited content if any
+        const finalKnowledgeResult = this.#mergeEditedContent(
+          knowledgeResult,
+          approvedKnowledgeResult
+        );
+
+        // Update orchestrator about progress
+        await this.#updateOrchestrator(
+          "Knowledge Retrieval completed, moving to Analogy Generation"
+        );
+
+        knowledgeResult = finalKnowledgeResult;
+      }
+
+      // Step 4: Analogy Generation
       this.emit("processingStep", {
         step: "analogyGeneration",
         status: "starting",
@@ -198,8 +268,9 @@ class AgentManager extends EventEmitter {
 
       // Pass both potentially edited content objects to the analogy generation
       const combinedInput = {
-        contentAnalysis: finalContentAnalysis,
-        knowledgeRetrieval: finalKnowledgeResult,
+        contentAnalysis: contentAnalysisResult,
+        knowledgeRetrieval: knowledgeResult,
+        gitAnalysis: gitAnalysisResult,
       };
 
       const analogiesResult =
@@ -223,7 +294,7 @@ class AgentManager extends EventEmitter {
         "Analogy Generation completed, moving to Analogy Validation"
       );
 
-      // Step 4: Analogy Validation
+      // Step 5: Analogy Validation
       this.emit("processingStep", {
         step: "analogyValidation",
         status: "starting",
@@ -254,7 +325,7 @@ class AgentManager extends EventEmitter {
         "Analogy Validation completed, moving to Analogy Refinement"
       );
 
-      // Step 5: Analogy Refinement
+      // Step 6: Analogy Refinement
       this.emit("processingStep", {
         step: "analogyRefinement",
         status: "starting",
@@ -285,13 +356,16 @@ class AgentManager extends EventEmitter {
         "Analogy Refinement completed, moving to Explanation Generation"
       );
 
-      // Step 6: Explanation Generation
+      // Step 7: Explanation Generation
       this.emit("processingStep", { step: "explanation", status: "starting" });
 
       // Pass potentially edited content to explanation
       const explanationResult = await this.agents.explanation.createExplanation(
         finalRefinementResult,
-        { contentAnalysis: finalContentAnalysis }
+        {
+          contentAnalysis: contentAnalysisResult,
+          gitAnalysis: gitAnalysisResult,
+        }
       );
       this.updateState("explanation", explanationResult);
 
@@ -495,8 +569,6 @@ class AgentManager extends EventEmitter {
       throw error;
     }
   }
-
-  // Inside the AgentManager class
 
   /**
    * Handle workflow termination
