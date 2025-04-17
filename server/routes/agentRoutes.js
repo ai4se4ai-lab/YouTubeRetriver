@@ -16,6 +16,13 @@ router.post(
 // Approve a processing step
 router.post("/approve", helpers.authenticateToken, agentController.approveStep);
 
+// Reject and terminate the process
+router.post(
+  "/terminate",
+  helpers.authenticateToken,
+  agentController.terminateProcess
+);
+
 // Submit feedback
 router.post(
   "/feedback",

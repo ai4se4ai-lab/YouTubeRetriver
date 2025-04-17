@@ -25,12 +25,14 @@ module.exports = {
 
       // Define approval callback
       const approvalCallback = (step, result) => {
-        return new Promise((resolve) => {
-          // Store resolve function to be called when approved
+        return new Promise((resolve, reject) => {
+          // Store resolve/reject functions to be called when approved/rejected
           if (!pendingApprovals.has(activeSessionId)) {
             pendingApprovals.set(activeSessionId, new Map());
           }
-          pendingApprovals.get(activeSessionId).set(step, { resolve, result });
+          pendingApprovals
+            .get(activeSessionId)
+            .set(step, { resolve, reject, result });
         });
       };
 
@@ -114,11 +116,90 @@ module.exports = {
   },
 
   /**
+   * Terminate the process (reject a step)
+   */
+  async terminateProcess(req, res) {
+    try {
+      const { sessionId, step, reason } = req.body;
+
+      if (
+        !pendingApprovals.has(sessionId) ||
+        !pendingApprovals.get(sessionId).has(step)
+      ) {
+        return res
+          .status(404)
+          .json({ error: "No pending approval found for this step" });
+      }
+
+      // Get the reject function
+      const { reject } = pendingApprovals.get(sessionId).get(step);
+
+      // Remove from pending map
+      pendingApprovals.get(sessionId).delete(step);
+
+      // Call the orchestrator to handle termination
+      await agentService.handleTermination(sessionId, {
+        rejectedStep: step,
+        reason: reason || "User rejected step",
+      });
+
+      // Reject the promise to stop processing
+      reject(new Error("Process terminated by user"));
+
+      // Notify all clients subscribed to this session via socket
+      const io = req.app.get("io");
+      if (io) {
+        io.to(sessionId).emit("processTerminated", {
+          step,
+          reason: reason || "User rejected step",
+        });
+      }
+
+      res.json({
+        success: true,
+        message: `Process terminated at step ${step}`,
+      });
+    } catch (error) {
+      console.error("Error terminating process:", error);
+      res.status(500).json({
+        error: "Failed to terminate process",
+        message: error.message,
+      });
+    }
+  },
+
+  /**
    * Submit user feedback
    */
   async submitFeedback(req, res) {
     try {
       const { feedback, sessionId } = req.body;
+
+      // Check for termination phrases
+      const terminationPhrases = [
+        "terminate the process",
+        "finish it",
+        "i am done",
+        "end process",
+        "stop it",
+        "that's enough",
+        "that's all",
+        "i'm finished",
+      ];
+
+      const feedbackLower = feedback.toLowerCase();
+      const isTerminating = terminationPhrases.some((phrase) =>
+        feedbackLower.includes(phrase)
+      );
+
+      if (isTerminating) {
+        // User wants to terminate - just return success
+        return res.json({
+          success: true,
+          terminated: true,
+          message: "Process terminated by user feedback",
+        });
+      }
 
       // Get the current state to find the explanation
       const history = agentService.getProcessingHistory();
@@ -273,10 +354,70 @@ module.exports = {
         }
       });
 
+      // Listen for step rejection/termination
+      socket.on("rejectStep", (data) => {
+        const { sessionId, step, reason } = data;
+
+        if (
+          pendingApprovals.has(sessionId) &&
+          pendingApprovals.get(sessionId).has(step)
+        ) {
+          console.log(`Step ${step} rejected via socket`);
+
+          // Get the reject function
+          const { reject } = pendingApprovals.get(sessionId).get(step);
+
+          // Remove from pending map
+          pendingApprovals.get(sessionId).delete(step);
+
+          // Call the orchestrator to handle termination
+          agentService
+            .handleTermination(sessionId, {
+              rejectedStep: step,
+              reason: reason || "User rejected step",
+            })
+            .then(() => {
+              // Notify all clients subscribed to this session
+              io.to(sessionId).emit("processTerminated", {
+                step,
+                reason: reason || "User rejected step",
+              });
+            });
+
+          // Reject the promise to stop processing
+          reject(new Error("Process terminated by user"));
+        }
+      });
+
       // Listen for feedback submission
       socket.on("feedback", async (data) => {
         try {
           const { feedback, sessionId } = data;
+
+          // Check for termination phrases
+          const terminationPhrases = [
+            "terminate the process",
+            "finish it",
+            "i am done",
+            "end process",
+            "stop it",
+            "that's enough",
+            "that's all",
+            "i'm finished",
+          ];
+
+          const feedbackLower = feedback.toLowerCase();
+          const isTerminating = terminationPhrases.some((phrase) =>
+            feedbackLower.includes(phrase)
+          );
+
+          if (isTerminating) {
+            // User wants to terminate - just notify the clients
+            io.to(sessionId).emit("processFeedbackTerminated", {
+              message: "Process completed by user request",
+            });
+            return;
+          }
 
           // Get the explanation result
           const history = agentService.getProcessingHistory();
@@ -329,6 +470,9 @@ module.exports = {
       });
     });
 
+    // Remove this problematic line
+    // io.app.set('io', io);
+
     // Set up event listeners for agent state updates
     const agentManager = agentService.initAgents();
 
@@ -353,6 +497,13 @@ module.exports = {
 
     agentManager.on("error", (error) => {
       io.to(error.state.sessionId).emit("error", error);
+    });
+
+    agentManager.on("terminated", (terminationInfo) => {
+      io.to(terminationInfo.sessionId).emit(
+        "processTerminated",
+        terminationInfo
+      );
     });
   },
 };

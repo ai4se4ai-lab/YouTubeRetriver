@@ -315,7 +315,7 @@
                         This agent orchestrates the entire workflow, ensuring proper coordination
                     </div>
                     <div class="agent-cards">
-                        <!-- Orchestrator Agent - UPDATED WITH MESSAGE CONTAINER -->
+                        <!-- Orchestrator Agent - WITH MESSAGE CONTAINER -->
                         <div class="agent-card idle" id="orchestrator-card">
                             <div class="agent-header">
                                 <div class="agent-name">Orchestrator Agent</div>
@@ -331,7 +331,7 @@
                                 <span class="agent-id">A6</span>
                                 <span class="agent-time"></span>
                             </div>
-                            <!-- New message container for orchestrator updates -->
+                            <!-- Message container for orchestrator updates -->
                             <div class="agent-message"></div>
                             <div class="agent-result-container hidden">
                                 <div class="agent-result"></div>
@@ -347,7 +347,7 @@
                 </div>
             </section>
             
-            <!-- Feedback Section -->
+            <!-- Hidden Feedback Section (replaced by modal) -->
             <section id="feedback-section" class="card hidden">
                 <h2>Provide Feedback</h2>
                 <p>Your feedback helps our agents learn and improve. Please share your thoughts on the analysis.</p>
@@ -400,8 +400,43 @@
                 <div class="approval-result"></div>
             </div>
             <div class="approval-actions">
-                <button class="btn secondary" id="cancel-approval">Cancel</button>
+                <button class="btn reject-button" id="reject-approval">Reject</button>
                 <button class="btn primary approve-button">Approve</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="approval-modal feedback-modal">
+        <div class="approval-content">
+            <div class="approval-header">
+                <h3 class="approval-title">Provide Feedback</h3>
+                <span class="close-modal" onclick="hideFeedbackModal()">&times;</span>
+            </div>
+            <div class="approval-body">
+                <p>Please share your thoughts on the analysis to help improve future results:</p>
+                <textarea id="feedback-modal-text" class="feedback-textarea" placeholder="What did you think of the analysis? Was it insightful? Accurate? Useful? Or type 'I am done' to finish."></textarea>
+                <div id="feedback-modal-status"></div>
+            </div>
+            <div class="approval-actions">
+                <button class="btn reject-button" onclick="hideFeedbackModal()">Cancel</button>
+                <button class="btn primary" id="feedback-modal-submit" onclick="submitFeedback()">Submit Feedback</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Final Results Modal -->
+    <div id="final-results-modal" class="approval-modal final-results-modal">
+        <div class="approval-content">
+            <div class="approval-header">
+                <h3 class="approval-title">Your YouTube Interest Analogies</h3>
+                <span class="close-modal" onclick="hideFinalResultsModal()">&times;</span>
+            </div>
+            <div class="approval-body">
+                <div id="final-results-content" class="markdown-view"></div>
+            </div>
+            <div class="approval-actions">
+                <button class="btn primary" onclick="hideFinalResultsModal()">Close</button>
             </div>
         </div>
     </div>

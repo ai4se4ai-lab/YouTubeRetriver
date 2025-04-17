@@ -157,7 +157,7 @@ class AgentManager extends EventEmitter {
 
       // Update orchestrator about progress
       await this.#updateOrchestrator(
-        "Content Analysis completed, moving to Knowledge Retrieval"
+        "Explanation Generation completed, awaiting user feedback"
       );
 
       // Step 2: Knowledge Retrieval
@@ -492,6 +492,59 @@ class AgentManager extends EventEmitter {
       };
     } catch (error) {
       console.error("Error processing feedback:", error);
+      throw error;
+    }
+  }
+
+  // Inside the AgentManager class
+
+  /**
+   * Handle workflow termination
+   * @param {Object} terminationData - Information about the termination
+   * @returns {Promise<Object>} - Termination handling result
+   */
+  async handleTermination(terminationData) {
+    try {
+      // Update state to reflect termination
+      this.currentState.terminated = true;
+      this.currentState.endTime = Date.now();
+      this.currentState.totalDuration =
+        this.currentState.endTime - this.currentState.startTime;
+      this.currentState.terminationReason =
+        terminationData.reason || "User rejected a step";
+
+      // Stop the orchestrator monitoring
+      this.#stopOrchestratorMonitoring();
+
+      // Let orchestrator handle the termination
+      const terminationSummary =
+        await this.agents.orchestrator.handleTermination({
+          ...terminationData,
+          sessionId: this.activeSession,
+          timestamp: new Date().toISOString(),
+        });
+
+      // Add to processing history
+      this.processingHistory.push({
+        name: "Termination",
+        processed: true,
+        result: {
+          output: `Workflow terminated at step ${terminationData.rejectedStep}. Reason: ${terminationData.reason}`,
+        },
+        timestamp: new Date().toISOString(),
+      });
+
+      // Emit termination event
+      this.emit("terminated", {
+        sessionId: this.activeSession,
+        step: terminationData.rejectedStep,
+        reason: terminationData.reason,
+        timestamp: new Date().toISOString(),
+      });
+
+      return terminationSummary;
+    } catch (error) {
+      console.error("Error handling termination:", error);
       throw error;
     }
   }

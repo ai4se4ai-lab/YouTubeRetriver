@@ -6,12 +6,23 @@ const BaseAgent = require("../baseAgent");
 const config = require("../../config/config");
 
 class ExplanationAgent extends BaseAgent {
+  // In ExplanationAgent.js
+
   constructor() {
     super(
       "Explanation Agent (A4)",
       "Presents analogies to users in an understandable and engaging manner"
     );
-    this.prompt = config.agents.explanationPrompt;
+    const basePrompt = config.agents.explanationPrompt;
+    this.prompt = `${basePrompt}
+  
+  IMPORTANT: Format your output as a set of short, interesting analogies that the user can easily understand and relate to. Each analogy should:
+  1. Have a clear title or topic
+  2. Explain how the user's YouTube interests connect to a broader concept or domain
+  3. Be concise - ideally 2-3 sentences per analogy
+  4. Focus on being interesting and thought-provoking rather than exhaustive
+  
+  Begin your response with "# YouTube Interest Analogies" followed by the analogies. Do not include technical details, methodology explanations, or any meta-commentary about the process.`;
   }
 
   /**

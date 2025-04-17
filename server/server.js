@@ -39,6 +39,9 @@ const io = socketIo(server, {
   },
 });
 
+// Make io accessible to the Express app
+app.set("io", io);
+
 // Middleware
 // Increase JSON body parser limits for large datasets
 app.use(express.json({ limit: "50mb" }));

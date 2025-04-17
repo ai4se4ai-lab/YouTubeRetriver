@@ -44,10 +44,21 @@ class BaseAgent {
         // This is specific to each agent's implementation
       }
 
+      // Add instruction to summarize output for display to the system prompt
+      const enhancedPrompt = `${prompt}
+      
+IMPORTANT: Your response will be shown to the user and also passed to other agents. Please follow these guidelines:
+1. Focus on the most relevant information and insights
+2. Be concise and clear - limit your response to 250 words maximum
+3. Avoid including technical details like token counts, usage statistics, etc.
+4. Structure your response logically with clear sections if appropriate
+5. If you're generating analogies, make them short, interesting, and focused
+6. Remove any metadata or system-related information from your response`;
+
       const messages = [
         {
           role: "system",
-          content: `You are ${this.name}, ${this.description}. ${prompt}`,
+          content: `You are ${this.name}, ${this.description}. ${enhancedPrompt}`,
         },
         {
           role: "user",
@@ -61,8 +72,14 @@ class BaseAgent {
         temperature: 0.7,
       });
 
+      const rawOutput = response.choices[0].message.content;
+
+      // Process the output to ensure it's clean and summarized for display
+      const summarizedOutput = this.summarizeOutput(rawOutput);
+
       this.result = {
-        output: response.choices[0].message.content,
+        output: summarizedOutput,
+        rawOutput: rawOutput, // Keep the raw output for agents that might need it
         usage: response.usage,
         model: response.model,
       };
@@ -84,6 +101,41 @@ class BaseAgent {
         duration: this.duration,
       };
     }
+  }
+
+  /**
+   * Summarize and clean agent output for display
+   * @param {string} output - Raw output to summarize
+   * @param {number} maxWords - Maximum number of words to include
+   * @returns {string} - Summarized and cleaned output
+   */
+  summarizeOutput(output, maxWords = 250) {
+    if (!output) return "";
+
+    // Remove technical data like tokens, usage, etc.
+    let cleaned = output.replace(/prompt_tokens.*?[,}]/g, "");
+    cleaned = cleaned.replace(/completion_tokens.*?[,}]/g, "");
+    cleaned = cleaned.replace(/total_tokens.*?[,}]/g, "");
+    cleaned = cleaned.replace(/usage.*?}/g, "");
+    cleaned = cleaned.replace(/{"output": /g, "");
+    cleaned = cleaned.replace(/},?\s*$/g, "");
+
+    // Remove any JSON formatting artifacts
+    cleaned = cleaned.replace(/```json\s*|```\s*$/g, "");
+
+    // Remove any token or technical stats that might be in text form
+    cleaned = cleaned.replace(/Tokens used:.*$/gm, "");
+    cleaned = cleaned.replace(/Total tokens:.*$/gm, "");
+    cleaned = cleaned.replace(/Processing time:.*$/gm, "");
+
+    // Remove quotes at beginning and end if they exist (from JSON)
+    cleaned = cleaned.replace(/^"/, "").replace(/"$/, "");
+
+    // Split into words and limit to maxWords
+    const words = cleaned.split(/\s+/);
+    if (words.length <= maxWords) return cleaned;
+
+    return words.slice(0, maxWords).join(" ") + "...";
   }
 
   /**
