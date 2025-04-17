@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
     socket: null,
     sessionId: null,
     agents: {
+      gitAnalysis: { status: "idle", result: null },
       contentAnalysis: { status: "idle", result: null },
       knowledgeRetrieval: { status: "idle", result: null },
       analogyGeneration: { status: "idle", result: null },
@@ -224,7 +225,17 @@ document.addEventListener("DOMContentLoaded", () => {
         likedVideos: document.getElementById("liked-videos").checked,
         watchHistory: document.getElementById("watch-history").checked,
         maxResults: parseInt(document.getElementById("max-results").value, 10),
+        enableGitAnalysis:
+          document.getElementById("git-analysis")?.checked || false,
+        gitRepoUrl: document.getElementById("git-repo-url")?.value || "",
+        gitBranch: document.getElementById("git-branch")?.value || "main",
       };
+
+      // Validate Git options if enabled
+      if (options.enableGitAnalysis && !options.gitRepoUrl) {
+        alert("Please enter a Git repository URL for analysis.");
+        return;
+      }
 
       // Validate options
       if (!options.likedVideos && !options.watchHistory) {
@@ -1401,6 +1412,20 @@ document.addEventListener("DOMContentLoaded", () => {
         toggleResultDisplay(this);
       });
     });
+
+    // Git repository options toggle
+    const gitAnalysisCheckbox = document.getElementById("git-analysis");
+    const gitRepoDetails = document.querySelector(".git-repo-details");
+
+    if (gitAnalysisCheckbox && gitRepoDetails) {
+      gitAnalysisCheckbox.addEventListener("change", function () {
+        if (this.checked) {
+          gitRepoDetails.classList.remove("hidden");
+        } else {
+          gitRepoDetails.classList.add("hidden");
+        }
+      });
+    }
 
     // Close modal when clicking outside
     const modals = document.querySelectorAll(

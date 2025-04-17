@@ -15,6 +15,7 @@ class OrchestratorAgent extends BaseAgent {
     this.lastMonitoringTime = null;
     this.monitoringHistory = [];
     this.isTerminated = false;
+    this.gitMonitoringActive = false;
   }
 
   /**
@@ -24,7 +25,24 @@ class OrchestratorAgent extends BaseAgent {
    */
   async planWorkflow(inputData) {
     this.lastMonitoringTime = Date.now();
-    const result = await this.process(inputData, this.prompt);
+
+    // Check if Git analysis is enabled in the options
+    this.gitMonitoringActive =
+      inputData.options && inputData.options.enableGitAnalysis;
+
+    // Modify prompt for Git analysis if enabled
+    let modifiedPrompt = this.prompt;
+    if (this.gitMonitoringActive) {
+      modifiedPrompt = `${this.prompt}
+      
+IMPORTANT: This workflow includes Git repository analysis for code issues. You should:
+1. Coordinate the Git Analysis Agent (A20) as the first or parallel step
+2. Ensure any findings from the Git Analysis are incorporated into subsequent steps
+3. Monitor the Git Analysis process for any issues or delays
+4. Consider code analysis results when generating analogies and explanations`;
+    }
+
+    const result = await this.process(inputData, modifiedPrompt);
 
     // Initialize monitoring history with the initial plan
     this.monitoringHistory = [
@@ -32,27 +50,27 @@ class OrchestratorAgent extends BaseAgent {
         timestamp: new Date().toISOString(),
         event: "Workflow initialized",
         details: "Initial workflow plan created",
+        includesGitAnalysis: this.gitMonitoringActive,
       },
     ];
 
     return result;
   }
 
-  /**
-   * Monitor and adjust workflow as needed
-   * @param {Object} currentState - Current state of all agents
-   * @param {Object} originalPlan - Original processing plan
-   * @returns {Promise<Object>} - Updated coordination instructions
-   */
   async monitorWorkflow(currentState, originalPlan) {
     // If workflow is terminated, add that information to the monitoring prompt
     const termState = this.isTerminated
       ? "This workflow has been terminated. "
       : "";
 
+    // Add Git monitoring context if active
+    const gitContext = this.gitMonitoringActive
+      ? "This workflow includes Git repository analysis. Pay special attention to the Git Analysis Agent's progress and results. "
+      : "";
+
     const monitoringPrompt = `${this.prompt} 
 
-${termState}You are now actively monitoring the execution of a multi-agent workflow. Your role is to:
+${termState}${gitContext}You are now actively monitoring the execution of a multi-agent workflow. Your role is to:
 
 1. Continuously observe all agent states and identify any issues or bottlenecks
 2. Detect if any agent is stuck or not progressing as expected
@@ -75,6 +93,7 @@ Otherwise, provide a brief status summary and any optimization recommendations.
       timestamp: new Date().toISOString(),
       event: "Monitoring check",
       timeSinceLastCheck: `${Math.round(timeSinceLastCheck / 1000)} seconds`,
+      gitMonitoringActive: this.gitMonitoringActive,
     });
 
     const formattedInput = {
@@ -85,6 +104,7 @@ Otherwise, provide a brief status summary and any optimization recommendations.
       timeSinceLastCheck: `${Math.round(timeSinceLastCheck / 1000)} seconds`,
       timestamp: new Date().toISOString(),
       isTerminated: this.isTerminated,
+      gitMonitoringActive: this.gitMonitoringActive,
     };
 
     return this.process(formattedInput, monitoringPrompt);
@@ -101,9 +121,14 @@ Otherwise, provide a brief status summary and any optimization recommendations.
       ? "Note: This workflow was terminated early by user request. "
       : "";
 
+    // Add Git context to the summary if it was active
+    const gitContext = this.gitMonitoringActive
+      ? "This workflow included Git repository analysis. Be sure to include the Git Analysis Agent's contributions and findings in your summary. "
+      : "";
+
     const summaryPrompt = `${this.prompt} 
     
-${termStatus}Your task is to summarize the entire workflow execution. Analyze the following:
+${termStatus}${gitContext}Your task is to summarize the entire workflow execution. Analyze the following:
 
 1. Overall effectiveness and efficiency of the multi-agent system
 2. Key strengths and weaknesses identified throughout the process
@@ -134,19 +159,25 @@ Organize your response into clearly labeled sections.`;
         processingHistory.length,
       timestamp: new Date().toISOString(),
       isTerminated: this.isTerminated,
+      gitMonitoringActive: this.gitMonitoringActive,
     };
 
     return this.process(formattedInput, summaryPrompt);
   }
 
-  /**
-   * Provide oversight for a specific agent's progress
-   * @param {string} agentName - Name of the agent
-   * @param {Object} agentState - Current state of the agent
-   * @param {Object} previousResults - Results from previous agents
-   * @returns {Promise<Object>} - Oversight guidance
-   */
   async provideAgentOversight(agentName, agentState, previousResults) {
+    // Special instructions for Git Analysis Agent
+    let specialInstructions = "";
+    if (agentName === "gitAnalysis") {
+      specialInstructions = `
+As this is the Git Analysis Agent, focus on:
+1. Ensuring proper connection to the Git repository
+2. Checking if code changes were correctly detected
+3. Verifying that security and code quality issues are properly identified
+4. Confirming that sufficient context is extracted for each issue
+5. Assessing the quality of the analysis for use in subsequent steps`;
+    }
+
     const oversightPrompt = `${this.prompt}
     
 You are now focusing on providing specific oversight for the ${agentName}. Your role is to:
@@ -155,7 +186,7 @@ You are now focusing on providing specific oversight for the ${agentName}. Your 
 2. Check if the agent has all necessary information from previous agents
 3. Verify the quality and relevance of its current outputs
 4. Identify any assistance or clarification the agent might need
-5. Ensure the agent's output aligns with the overall workflow objectives
+5. Ensure the agent's output aligns with the overall workflow objectives${specialInstructions}
 
 Provide concise but thorough guidance to optimize this agent's performance.`;
 
@@ -164,6 +195,7 @@ Provide concise but thorough guidance to optimize this agent's performance.`;
       agentState,
       previousResults,
       timestamp: new Date().toISOString(),
+      isGitAnalysisAgent: agentName === "gitAnalysis",
     };
 
     // Record this oversight event
@@ -171,9 +203,21 @@ Provide concise but thorough guidance to optimize this agent's performance.`;
       timestamp: new Date().toISOString(),
       event: "Agent oversight",
       agent: agentName,
+      isGitAnalysisAgent: agentName === "gitAnalysis",
     });
 
     return this.process(formattedInput, oversightPrompt);
+  }
+
+  /**
+   * Reset the agent state including monitoring history
+   */
+  reset() {
+    super.reset();
+    this.lastMonitoringTime = null;
+    this.monitoringHistory = [];
+    this.isTerminated = false;
+    this.gitMonitoringActive = false;
   }
 
   /**

@@ -46,6 +46,8 @@ const config = {
   agents: {
     openaiApiKey: process.env.OPENAI_API_KEY,
     model: "gpt-4-turbo",
+    gitAnalysisPrompt:
+      "Analyze the Git repository changes to identify potential security vulnerabilities, code quality issues, or other concerns. Focus on extracting significant patterns and providing actionable insights about the code changes.",
     contentAnalysisPrompt:
       "Analyze the YouTube data to identify main themes, topics, and potential user interests. Focus on extracting meaningful patterns and insights.",
     knowledgeRetrievalPrompt:

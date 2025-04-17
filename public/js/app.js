@@ -22,6 +22,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const exportStatus = document.getElementById("export-status");
   const progressBar = document.getElementById("progress-bar");
 
+  const gitAnalysisCheckbox = document.getElementById("git-analysis");
+  const gitRepoDetails = document.querySelector(".git-repo-details");
+
   // Track export completion state
   let exportCompleted = false;
 
@@ -49,6 +52,17 @@ document.addEventListener("DOMContentLoaded", () => {
     .catch((error) => {
       console.error("Error checking auth status:", error);
     });
+
+  // Show/hide git repo details when checkbox is toggled
+  if (gitAnalysisCheckbox && gitRepoDetails) {
+    gitAnalysisCheckbox.addEventListener("change", function () {
+      if (this.checked) {
+        gitRepoDetails.classList.remove("hidden");
+      } else {
+        gitRepoDetails.classList.add("hidden");
+      }
+    });
+  }
 
   // Authentication button click event
   if (authButton) {
