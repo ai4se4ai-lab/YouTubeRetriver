@@ -1,0 +1,804 @@
+/* Agent System Styling */
+:root {
+    --primary-color: #ff0000;
+    --primary-hover: #cc0000;
+    --secondary-color: #282828;
+    --accent-color: #4285F4;
+    --success-color: #34A853;
+    --warning-color: #FBBC05;
+    --error-color: #EA4335;
+    --text-color: #333;
+    --light-text: #666;
+    --light-gray: #f5f5f5;
+    --gray: #e0e0e0;
+    --dark-gray: #666;
+    --white: #fff;
+    --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    --border-radius: 4px;
+    --transition: all 0.3s ease;
+    --code-bg: #f7f7f7;
+    --editor-bg: #f9f9f9;
+}
+
+/* Agent Panels */
+.agent-system {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin-top: 30px;
+    position: relative;
+}
+
+.agent-system-header {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.agent-layer {
+    margin-bottom: 30px;
+    padding: 15px;
+    border-radius: var(--border-radius);
+    background-color: var(--light-gray);
+    box-shadow: var(--box-shadow);
+    position: relative;
+    z-index: 5;
+}
+
+.layer-title {
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+    color: var(--secondary-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.layer-description {
+    font-size: 0.9rem;
+    color: var(--light-text);
+    margin-bottom: 15px;
+}
+
+.agent-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    justify-content: center;
+}
+
+.agent-card {
+    width: 100%;
+    border-radius: var(--border-radius);
+    padding: 15px;
+    background-color: var(--white);
+    box-shadow: var(--box-shadow);
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+    z-index: 10;
+}
+
+.agent-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.agent-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.agent-name {
+    font-weight: 600;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+}
+
+.agent-status {
+    font-size: 0.8rem;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background-color: var(--gray);
+}
+
+.agent-status.idle {
+    background-color: var(--gray);
+}
+
+.agent-status.processing {
+    background-color: var(--warning-color);
+    color: var(--white);
+}
+
+.agent-status.completed {
+    background-color: var(--success-color);
+    color: var(--white);
+}
+
+.agent-status.error {
+    background-color: var(--error-color);
+    color: var(--white);
+}
+
+.agent-status.waiting {
+    background-color: var(--accent-color);
+    color: var(--white);
+}
+
+.agent-description {
+    font-size: 0.9rem;
+    color: var(--light-text);
+    margin-bottom: 15px;
+}
+
+.agent-progress {
+    height: 4px;
+    background-color: var(--gray);
+    border-radius: 2px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.agent-progress-bar {
+    height: 100%;
+    width: 0;
+    background-color: var(--accent-color);
+    transition: width 0.3s ease;
+}
+
+.agent-details {
+    font-size: 0.85rem;
+    color: var(--light-text);
+    display: flex;
+    justify-content: space-between;
+}
+
+.agent-action-buttons {
+    margin-top: 15px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* Fixed Agent Results - Removed double scrollbar */
+.agent-result {
+    margin-top: 15px;
+    padding: 0;
+    background-color: transparent;
+    max-height: none;
+    overflow: visible;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.agent-result.expanded {
+    max-height: none;
+}
+
+.agent-result-toggle {
+    display: block;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--accent-color);
+    cursor: pointer;
+    margin-top: 5px;
+}
+
+/* Markdown and Code Formatting */
+.markdown-view {
+    background-color: var(--white);
+    padding: 15px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gray);
+    overflow-y: auto;
+    max-height: 350px;
+}
+
+.markdown-view h1, 
+.markdown-view h2, 
+.markdown-view h3, 
+.markdown-view h4 {
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    color: var(--secondary-color);
+    font-weight: bold;
+}
+
+.markdown-view h1 {
+    font-size: 1.5rem;
+    border-bottom: 1px solid var(--gray);
+    padding-bottom: 0.3em;
+}
+
+.markdown-view h2 {
+    font-size: 1.3rem;
+    border-bottom: 1px solid var(--gray);
+    padding-bottom: 0.2em;
+}
+
+.markdown-view h3 {
+    font-size: 1.2rem;
+}
+
+.markdown-view h4 {
+    font-size: 1.1rem;
+}
+
+.markdown-view pre {
+    background-color: var(--code-bg);
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-family: 'Courier New', Courier, monospace;
+    margin: 1em 0;
+}
+
+.markdown-view code {
+    background-color: var(--code-bg);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+    color: #d63384;
+}
+
+.markdown-view pre code {
+    color: inherit;
+    padding: 0;
+    background-color: transparent;
+}
+
+.markdown-view blockquote {
+    border-left: 4px solid var(--accent-color);
+    padding-left: 15px;
+    margin-left: 0;
+    color: var(--dark-gray);
+    font-style: italic;
+}
+
+.markdown-view ul, 
+.markdown-view ol {
+    padding-left: 20px;
+    margin: 1em 0;
+}
+
+.markdown-view li {
+    margin-bottom: 0.5em;
+}
+
+.markdown-view table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1em 0;
+}
+
+.markdown-view th,
+.markdown-view td {
+    border: 1px solid var(--gray);
+    padding: 6px 13px;
+}
+
+.markdown-view th {
+    background-color: var(--light-gray);
+    font-weight: bold;
+}
+
+.markdown-view tr:nth-child(even) {
+    background-color: var(--light-gray);
+}
+
+/* Editable content area */
+.editable-content {
+    background-color: var(--editor-bg);
+    padding: 15px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gray);
+    min-height: 200px;
+    max-height: 350px;
+    overflow-y: auto;
+    font-family: 'Courier New', Courier, monospace;
+    white-space: pre-wrap;
+    line-height: 1.5;
+    tab-size: 4;
+}
+
+.editor-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.editor-toggle-btn, 
+.editor-save-btn {
+    font-size: 0.8rem;
+    padding: 5px 10px;
+}
+
+.save-confirmation {
+    color: var(--success-color);
+    font-size: 0.8rem;
+    margin-left: 10px;
+    align-self: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.save-confirmation.visible {
+    opacity: 1;
+}
+
+/* Orchestrator monitoring styles */
+.active-monitoring {
+    border: 2px solid var(--accent-color) !important;
+    box-shadow: 0 0 10px var(--accent-color) !important;
+    transition: all 0.5s ease;
+}
+
+/* Agent message container */
+.agent-message {
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: 0.8rem;
+    margin-top: 10px;
+    padding: 8px;
+    background-color: var(--light-gray);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gray);
+}
+
+/* Empty agent message container should be hidden */
+.agent-message:empty {
+    display: none;
+}
+
+/* Individual message styling */
+.orchestrator-message {
+    margin-bottom: 5px;
+    padding: 5px;
+    border-bottom: 1px solid var(--gray);
+}
+
+.orchestrator-message:last-child {
+    border-bottom: none;
+}
+
+/* Message time stamp */
+.message-time {
+    color: var(--dark-gray);
+    font-size: 0.7rem;
+    margin-right: 5px;
+    font-weight: bold;
+}
+
+/* Message content */
+.message-content {
+    white-space: pre-wrap;
+    color: var(--text-color);
+}
+
+/* Alert messages */
+.orchestrator-message.alert .message-content {
+    color: var(--error-color);
+    font-weight: bold;
+}
+
+/* Pulse animation for active monitoring */
+@keyframes pulse-border {
+    0% {
+        box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(66, 133, 244, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(66, 133, 244, 0);
+    }
+}
+
+.pulse {
+    animation: pulse-border 2s infinite;
+}
+
+/* Orchestrator card specific styles */
+#orchestrator-card.active-monitoring .agent-name::before {
+    content: "•";
+    color: var(--success-color);
+    font-size: 1.2rem;
+    margin-right: 5px;
+    animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+    0% { opacity: 0; }
+    50% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* Agent Connection Lines - Enhanced */
+.agent-connections {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.agent-connection {
+    position: absolute;
+    stroke: var(--accent-color);
+    stroke-width: 3;
+    stroke-dasharray: 5;
+    pointer-events: none;
+    filter: drop-shadow(0 0 3px rgba(66, 133, 244, 0.5));
+}
+
+.agent-connection.active {
+    stroke-width: 4;
+    stroke-dasharray: 12, 12; /* Creates dots */
+    animation: dash 30s linear infinite, move-dots 2s linear infinite;
+    filter: drop-shadow(0 0 5px rgba(66, 133, 244, 0.8));
+}
+
+@keyframes move-dots {
+    0% {
+        stroke-dashoffset: 24;
+    }
+    100% {
+        stroke-dashoffset: 0;
+    }
+}
+
+.orchestrator-connection {
+    opacity: 0.3;
+    transition: opacity 0.3s ease;
+}
+
+.orchestrator-connection.active {
+    opacity: 0.8;
+}
+
+@keyframes dash {
+    to {
+        stroke-dashoffset: 1000;
+    }
+}
+
+/* Approval Modal */
+.approval-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: var(--transition);
+}
+
+.approval-modal.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.approval-content {
+    width: 90%;
+    max-width: 800px;
+    max-height: 80vh;
+    background-color: var(--white);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.approval-header {
+    padding: 15px;
+    background-color: var(--secondary-color);
+    color: var(--white);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.approval-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+/* Styled editable content in the approval modal */
+.approval-result .editable-content {
+    min-height: 250px;
+    max-height: 400px;
+    padding: 12px;
+    border: 2px solid var(--accent-color);
+    border-radius: 4px;
+    background-color: #fff;
+    font-family: 'Courier New', Courier, monospace;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-y: auto;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+  }
+  
+  .approval-result .edit-instructions {
+    color: var(--accent-color);
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+    padding: 5px;
+    background-color: rgba(66, 133, 244, 0.1);
+    border-radius: 4px;
+  }
+  
+  .approval-result .edit-instructions i {
+    margin-right: 5px;
+  }
+
+.approval-actions {
+    padding: 15px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    border-top: 1px solid var(--gray);
+}
+
+/* Approval button styling - make it more prominent */
+.approval-modal .approve-button {
+    font-weight: bold;
+    padding: 8px 16px;
+}
+
+/* Improved styling for the reject button */
+.reject-button {
+    background-color: #f44336;
+    color: white;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    font-size: 0.9rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+  
+  .reject-button:hover {
+    background-color: #d32f2f;
+  }
+  
+  .reject-button:active {
+    background-color: #b71c1c;
+    transform: translateY(1px);
+  }
+
+/* Thinking button styles */
+.thinking-btn {
+    background-color: var(--accent-color);
+    color: white;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    margin-right: 8px;
+    display: flex;
+    align-items: center;
+}
+
+.thinking-btn:hover {
+    background-color: #3367d6;
+}
+
+.thinking-btn i {
+    margin-right: 5px;
+    font-size: 0.9rem;
+}
+
+/* Agent thinking modal */
+.thinking-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: var(--transition);
+}
+
+.thinking-modal.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.thinking-content {
+    width: 90%;
+    max-width: 800px;
+    max-height: 80vh;
+    background-color: var(--white);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.thinking-header {
+    padding: 15px;
+    background-color: var(--accent-color);
+    color: var(--white);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.thinking-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex-grow: 1;
+    max-height: 60vh;
+}
+
+.thinking-content pre {
+    background-color: var(--light-gray);
+    padding: 15px;
+    border-radius: var(--border-radius);
+    font-family: 'Courier New', Courier, monospace;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--text-color);
+}
+
+/* Analysis button on start screen */
+.btn.analysis-disabled {
+    background-color: #cccccc;
+    color: #666666;
+    cursor: not-allowed;
+}
+
+.btn.analysis-disabled:hover {
+    background-color: #cccccc;
+}
+
+/* Add a pulse effect to buttons that need attention */
+.pulse-attention {
+    animation: pulse-attention 2s infinite;
+}
+
+@keyframes pulse-attention {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(255, 0, 0, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);
+    }
+}
+
+/* Feedback Section */
+.feedback-section {
+    margin-top: 30px;
+    padding: 20px;
+    background-color: var(--white);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+}
+
+.feedback-title {
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+}
+
+.feedback-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.feedback-textarea {
+    resize: vertical;
+    min-height: 100px;
+    padding: 10px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gray);
+}
+
+.feedback-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* Utility classes */
+.hidden {
+    display: none !important;
+}
+
+/* Responsive Adjustments */
+@media (min-width: 768px) {
+    .agent-cards {
+        flex-wrap: nowrap;
+    }
+    
+    .agent-card {
+        width: calc(50% - 15px);
+    }
+    
+    .workflow-buttons {
+        justify-content: flex-end;
+    }
+}
+
+@media (max-width: 767px) {
+    .agent-layer {
+        padding: 10px;
+    }
+    
+    .agent-card {
+        width: 100%;
+    }
+    
+    .approval-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+    
+    .approval-header {
+        padding: 10px;
+    }
+}
+
+/* Animation for processing */
+@keyframes pulse {
+    0% {
+        opacity: 0.6;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0.6;
+    }
+}
+
+.agent-card.processing {
+    animation: pulse 2s infinite;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--light-gray);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--dark-gray);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--secondary-color);
+}
+
