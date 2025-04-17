@@ -50,20 +50,24 @@
                 <div class="form-group">
                     <h3>Code Analysis</h3>
                     <label>
-                        <input type="checkbox" id="git-analysis">
-                        Git Repository Analysis
+                      <input type="checkbox" id="git-analysis">
+                      Git Repository Analysis
                     </label>
                     <div class="git-repo-details hidden">
-                        <div class="form-group">
-                            <label for="git-repo-url">Repository URL:</label>
-                            <input type="text" id="git-repo-url" placeholder="https://github.com/username/repo.git">
-                        </div>
-                        <div class="form-group">
-                            <label for="git-branch">Branch to analyze:</label>
-                            <input type="text" id="git-branch" placeholder="main">
-                        </div>
+                      <div class="form-group">
+                        <label for="git-repo-url">Repository URL:</label>
+                        <input type="text" id="git-repo-url" placeholder="https://github.com/username/repo.git">
+                      </div>
+                      <div class="form-group">
+                        <label for="git-branch">Branch to analyze:</label>
+                        <input type="text" id="git-branch" placeholder="main">
+                      </div>
+                      <div class="form-group">
+                        <button id="test-git-connection" class="btn secondary">Test Connection</button>
+                        <span id="git-connection-status">Not connected</span>
+                      </div>
                     </div>
-                </div>
+                  </div>
                 
                 <div class="buttons-container">
                     <button id="export-button" class="btn primary">Export Data to CSV</button>

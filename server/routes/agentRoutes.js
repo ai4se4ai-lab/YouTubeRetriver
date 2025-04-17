@@ -13,6 +13,11 @@ router.post(
   agentController.startProcessing
 );
 
+// Basic test endpoint
+router.get("/simple-test", (req, res) => {
+  res.json({ success: true, message: "Simple test endpoint working" });
+});
+
 // Approve a processing step
 router.post("/approve", helpers.authenticateToken, agentController.approveStep);
 
