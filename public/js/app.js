@@ -102,7 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
           gitConnectionSuccessful = true;
         }, 1000);
 
-        /* Uncomment this when the endpoint is fixed
+        // Uncomment this when the endpoint is fixed
         const response = await fetch("/api/agents/test-git-connection", {
           method: "POST",
           headers: {
@@ -111,9 +111,9 @@ document.addEventListener("DOMContentLoaded", () => {
           },
           body: JSON.stringify({ gitRepoUrl, gitBranch }),
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok && data.success) {
           gitConnectionStatus.textContent = "Connected ✓";
           gitConnectionStatus.className = "connected";
@@ -124,7 +124,6 @@ document.addEventListener("DOMContentLoaded", () => {
           gitConnectionSuccessful = false;
           alert(`Failed to connect: ${data.error || "Unknown error"}`);
         }
-        */
       } catch (error) {
         console.error("Error testing Git connection:", error);
         gitConnectionStatus.textContent = "Connection error";

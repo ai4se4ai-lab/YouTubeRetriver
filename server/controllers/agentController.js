@@ -499,4 +499,52 @@ module.exports = {
       );
     });
   },
+  /**
+   * Test Git repository connection
+   */
+  async testGitConnection(req, res) {
+    try {
+      const { gitRepoUrl, gitBranch } = req.body;
+
+      console.log("Testing Git connection:", gitRepoUrl, gitBranch);
+
+      // Set environment variables temporarily
+      process.env.GIT_REPO_URL = gitRepoUrl;
+      process.env.GIT_TARGET_BRANCH = gitBranch || "main";
+
+      // Get the Git Analysis Agent
+      const gitAgent = agentService.getAgent("gitAnalysis");
+
+      if (!gitAgent) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Git Analysis Agent not found" });
+      }
+
+      // Try to connect to the repository
+      const connected = await gitAgent.connectToRepository();
+
+      if (connected) {
+        res.json({
+          success: true,
+          message: "Git repository connection successful",
+          repoUrl: gitRepoUrl,
+          branch: gitBranch || "main",
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          message: "Failed to connect to Git repository",
+          error: gitAgent.error || "Unknown error",
+        });
+      }
+    } catch (error) {
+      console.error("Error testing Git connection:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error testing Git connection",
+        error: error.message,
+      });
+    }
+  },
 };
