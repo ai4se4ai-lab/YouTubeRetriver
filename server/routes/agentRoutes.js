@@ -18,6 +18,13 @@ router.get("/simple-test", (req, res) => {
   res.json({ success: true, message: "Simple test endpoint working" });
 });
 
+// Test Git repository connection
+router.post(
+  "/test-git-connection",
+  helpers.authenticateToken,
+  agentController.testGitConnection
+);
+
 // Approve a processing step
 router.post("/approve", helpers.authenticateToken, agentController.approveStep);
 
