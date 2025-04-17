@@ -6,8 +6,6 @@ const agentService = require("../services/agentService");
 
 // Store active sessions and approval callbacks
 const pendingApprovals = new Map();
-// Global variable for socket.io instance
-let io;
 
 module.exports = {
   /**
@@ -90,16 +88,6 @@ module.exports = {
       if (editedContent) {
         if (approvedResult && approvedResult.result) {
           approvedResult.result.output = editedContent;
-          // Also update the summarized output
-          approvedResult.result.summarizedOutput =
-            approvedResult.result.output.split(/\s+/).length > 250
-              ? approvedResult.result.output
-                  .split(/\s+/)
-                  .slice(0, 240)
-                  .join(" ") +
-                "... [Output truncated to 250 words. Click 'Show Full Content' to see full content]"
-              : approvedResult.result.output;
-
           console.log(`Updated content for ${step} with edited version`);
         }
       }
@@ -120,79 +108,6 @@ module.exports = {
       console.error("Error approving step:", error);
       res.status(500).json({
         error: "Failed to approve step",
-        message: error.message,
-      });
-    }
-  },
-
-  /**
-   * Reject a step and terminate the workflow
-   */
-  async rejectStep(req, res) {
-    try {
-      const { sessionId, step } = req.body;
-
-      if (!sessionId || !step) {
-        return res
-          .status(400)
-          .json({ error: "Session ID and step are required" });
-      }
-
-      console.log(
-        `Reject request received for session ${sessionId}, step ${step}`
-      );
-
-      // Get the agent manager
-      const agentManager = agentService.getAgentManager();
-
-      // Request termination
-      const terminationResult = await agentManager.requestTermination(
-        sessionId,
-        step,
-        "User rejected the results"
-      );
-
-      // Remove from pending approvals if exists
-      if (
-        pendingApprovals.has(sessionId) &&
-        pendingApprovals.get(sessionId).has(step)
-      ) {
-        // Get resolver to properly resolve the promise
-        const { resolve } = pendingApprovals.get(sessionId).get(step);
-        // Resolve with null to indicate rejection
-        resolve(null);
-        // Remove from pending map
-        pendingApprovals.get(sessionId).delete(step);
-
-        console.log(
-          `Removed ${step} from pending approvals for session ${sessionId}`
-        );
-      }
-
-      // Notify all clients subscribed to this session
-      if (io) {
-        io.to(sessionId).emit("workflowTerminated", {
-          reason: "User rejected results",
-          step,
-          message: "Workflow terminated because results were rejected.",
-          alertUser: true,
-          timestamp: new Date().toISOString(),
-        });
-
-        console.log(`Emitted workflowTerminated event to session ${sessionId}`);
-      } else {
-        console.error("IO instance not available for socket emissions");
-      }
-
-      res.json({
-        success: true,
-        message: "Workflow termination requested",
-        result: terminationResult,
-      });
-    } catch (error) {
-      console.error("Error rejecting step:", error);
-      res.status(500).json({
-        error: "Failed to reject step",
         message: error.message,
       });
     }
@@ -305,46 +220,10 @@ module.exports = {
   },
 
   /**
-   * Get agent thinking process
-   */
-  async getAgentThinking(req, res) {
-    try {
-      const { sessionId, agentKey } = req.params;
-
-      // Get the agent manager
-      const agentManager = agentService.getAgentManager();
-
-      // Get thinking process from the manager
-      const thinking = agentManager.getAgentThinking(sessionId, agentKey);
-
-      if (!thinking) {
-        return res.status(404).json({
-          error: "No thinking process found for this agent",
-        });
-      }
-
-      res.json({
-        success: true,
-        agent: agentKey,
-        thinking,
-      });
-    } catch (error) {
-      console.error("Error getting agent thinking:", error);
-      res.status(500).json({
-        error: "Failed to get agent thinking",
-        message: error.message,
-      });
-    }
-  },
-
-  /**
    * Set up WebSocket handlers
-   * @param {Object} socketIo - Socket.IO instance
+   * @param {Object} io - Socket.IO instance
    */
-  setupSocketHandlers(socketIo) {
-    // Store io instance for use in other methods
-    io = socketIo;
-
+  setupSocketHandlers(io) {
     io.on("connection", (socket) => {
       console.log("Client connected to agent socket");
 
@@ -362,9 +241,7 @@ module.exports = {
           pendingApprovals.has(sessionId) &&
           pendingApprovals.get(sessionId).has(step)
         ) {
-          console.log(
-            `Step ${step} approved via socket with edited content: ${!!editedContent}`
-          );
+          console.log(`Step ${step} approved via socket`);
 
           // Get the resolver function and result
           const { resolve, result } = pendingApprovals.get(sessionId).get(step);
@@ -376,16 +253,6 @@ module.exports = {
           if (editedContent) {
             if (approvedResult && approvedResult.result) {
               approvedResult.result.output = editedContent;
-              // Also update the summarized output for consistency
-              approvedResult.result.summarizedOutput =
-                approvedResult.result.output.split(/\s+/).length > 250
-                  ? approvedResult.result.output
-                      .split(/\s+/)
-                      .slice(0, 240)
-                      .join(" ") +
-                    "... [Output truncated to 250 words. Click 'Show Full Content' to see full content]"
-                  : approvedResult.result.output;
-
               console.log(
                 `Updated content for ${step} with edited version via socket`
               );
@@ -404,35 +271,6 @@ module.exports = {
             wasEdited: !!editedContent,
           });
         }
-      });
-
-      // Listen for step rejection
-      socket.on("rejectStep", (data) => {
-        const { sessionId, step } = data;
-        console.log(
-          `Received rejectStep via socket for session ${sessionId}, step ${step}`
-        );
-
-        // Call the reject handler directly
-        this.rejectStep(
-          {
-            body: { sessionId, step },
-          },
-          {
-            json: (response) => {
-              console.log("Step rejection processed via socket:", response);
-            },
-            status: (code) => ({
-              json: (error) => {
-                console.error(
-                  `Error processing step rejection via socket: ${code}`,
-                  error
-                );
-                socket.emit("error", error);
-              },
-            }),
-          }
-        );
       });
 
       // Listen for feedback submission
@@ -505,35 +343,12 @@ module.exports = {
       );
     });
 
-    // Add listener for agent thinking updates
-    agentManager.on("agentThinking", (data) => {
-      if (data.sessionId) {
-        io.to(data.sessionId).emit("agentThinking", {
-          agent: data.agent,
-          thinking: data.thinking,
-        });
-      }
-    });
-
     // Add listener for orchestrator updates
     agentManager.on("orchestratorUpdate", (update) => {
       io.to(agentManager.getCurrentState().sessionId).emit(
         "orchestratorUpdate",
         update
       );
-    });
-
-    // Add listener for workflow termination
-    agentManager.on("workflowTerminated", (data) => {
-      if (data.sessionId) {
-        io.to(data.sessionId).emit("workflowTerminated", {
-          reason: data.reason,
-          rejectedStep: data.rejectedStep,
-          message: data.message || "Workflow terminated by user request",
-          alertUser: data.alertUser || false,
-          timestamp: data.timestamp,
-        });
-      }
     });
 
     agentManager.on("error", (error) => {

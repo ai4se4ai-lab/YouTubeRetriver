@@ -2,7 +2,7 @@
  * Learning Agent (A52)
  * Analyzes feedback to improve the analogy generation process
  */
-const BaseAgent = require("../BaseAgent");
+const BaseAgent = require("../baseAgent");
 const config = require("../../config/config");
 
 class LearningAgent extends BaseAgent {

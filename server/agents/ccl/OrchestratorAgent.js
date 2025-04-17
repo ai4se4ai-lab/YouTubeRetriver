@@ -2,7 +2,7 @@
  * Orchestrator Agent (A6)
  * Manages workflow and coordination among all agents
  */
-const BaseAgent = require("../BaseAgent");
+const BaseAgent = require("../baseAgent");
 const config = require("../../config/config");
 
 class OrchestratorAgent extends BaseAgent {

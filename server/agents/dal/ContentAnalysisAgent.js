@@ -2,7 +2,7 @@
  * Content Analysis Agent (A21)
  * Processes YouTube data to extract themes, topics, and user interests
  */
-const BaseAgent = require("../BaseAgent");
+const BaseAgent = require("../baseAgent");
 const config = require("../../config/config");
 
 class ContentAnalysisAgent extends BaseAgent {

@@ -2,7 +2,7 @@
  * Explanation Agent (A4)
  * Presents the final analogies to the user in an understandable and engaging manner
  */
-const BaseAgent = require("../BaseAgent");
+const BaseAgent = require("../baseAgent");
 const config = require("../../config/config");
 
 class ExplanationAgent extends BaseAgent {

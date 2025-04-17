@@ -9,8 +9,6 @@
     <link rel="stylesheet" href="css/agents.css">
     <!-- Add highlight.js CSS for code highlighting -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.0/build/styles/default.min.css">
-    <!-- Add FontAwesome for icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
 <body>
     <div class="container">
@@ -47,7 +45,7 @@
                 </div>
                 <div class="buttons-container">
                     <button id="export-button" class="btn primary">Export Data to CSV</button>
-                    <button id="agent-start-btn" class="btn secondary analysis-disabled" disabled>Start Analysis with AI Agents</button>
+                    <button id="agent-start-btn" class="btn secondary">Analyze with AI Agents</button>
                 </div>
             </section>
 
@@ -96,9 +94,6 @@
                                 <span class="agent-time"></span>
                             </div>
                             <div class="agent-action-buttons">
-                                <button class="thinking-btn" onclick="showThinkingProcess('contentAnalysis')">
-                                    <i class="fas fa-brain"></i> Thinking
-                                </button>
                                 <button class="btn approve-button hidden">Approve</button>
                             </div>
                             <div class="agent-result-container hidden">
@@ -124,9 +119,6 @@
                                 <span class="agent-time"></span>
                             </div>
                             <div class="agent-action-buttons">
-                                <button class="thinking-btn" onclick="showThinkingProcess('knowledgeRetrieval')">
-                                    <i class="fas fa-brain"></i> Thinking
-                                </button>
                                 <button class="btn approve-button hidden">Approve</button>
                             </div>
                             <div class="agent-result-container hidden">
@@ -163,9 +155,6 @@
                                 <span class="agent-time"></span>
                             </div>
                             <div class="agent-action-buttons">
-                                <button class="thinking-btn" onclick="showThinkingProcess('analogyGeneration')">
-                                    <i class="fas fa-brain"></i> Thinking
-                                </button>
                                 <button class="btn approve-button hidden">Approve</button>
                             </div>
                             <div class="agent-result-container hidden">
@@ -191,9 +180,6 @@
                                 <span class="agent-time"></span>
                             </div>
                             <div class="agent-action-buttons">
-                                <button class="thinking-btn" onclick="showThinkingProcess('analogyValidation')">
-                                    <i class="fas fa-brain"></i> Thinking
-                                </button>
                                 <button class="btn approve-button hidden">Approve</button>
                             </div>
                             <div class="agent-result-container hidden">
@@ -219,9 +205,6 @@
                                 <span class="agent-time"></span>
                             </div>
                             <div class="agent-action-buttons">
-                                <button class="thinking-btn" onclick="showThinkingProcess('analogyRefinement')">
-                                    <i class="fas fa-brain"></i> Thinking
-                                </button>
                                 <button class="btn approve-button hidden">Approve</button>
                             </div>
                             <div class="agent-result-container hidden">
@@ -258,9 +241,6 @@
                                 <span class="agent-time"></span>
                             </div>
                             <div class="agent-action-buttons">
-                                <button class="thinking-btn" onclick="showThinkingProcess('explanation')">
-                                    <i class="fas fa-brain"></i> Thinking
-                                </button>
                                 <button class="btn approve-button hidden">Approve</button>
                             </div>
                             <div class="agent-result-container hidden">
@@ -296,11 +276,6 @@
                                 <span class="agent-id">A51</span>
                                 <span class="agent-time"></span>
                             </div>
-                            <div class="agent-action-buttons">
-                                <button class="thinking-btn" onclick="showThinkingProcess('userFeedback')">
-                                    <i class="fas fa-brain"></i> Thinking
-                                </button>
-                            </div>
                             <div class="agent-result-container hidden">
                                 <div class="agent-result"></div>
                                 <span class="agent-result-toggle">Show More</span>
@@ -323,11 +298,6 @@
                                 <span class="agent-id">A52</span>
                                 <span class="agent-time"></span>
                             </div>
-                            <div class="agent-action-buttons">
-                                <button class="thinking-btn" onclick="showThinkingProcess('learning')">
-                                    <i class="fas fa-brain"></i> Thinking
-                                </button>
-                            </div>
                             <div class="agent-result-container hidden">
                                 <div class="agent-result"></div>
                                 <span class="agent-result-toggle">Show More</span>
@@ -345,7 +315,7 @@
                         This agent orchestrates the entire workflow, ensuring proper coordination
                     </div>
                     <div class="agent-cards">
-                        <!-- Orchestrator Agent -->
+                        <!-- Orchestrator Agent - UPDATED WITH MESSAGE CONTAINER -->
                         <div class="agent-card idle" id="orchestrator-card">
                             <div class="agent-header">
                                 <div class="agent-name">Orchestrator Agent</div>
@@ -361,12 +331,7 @@
                                 <span class="agent-id">A6</span>
                                 <span class="agent-time"></span>
                             </div>
-                            <div class="agent-action-buttons">
-                                <button class="thinking-btn" onclick="showThinkingProcess('orchestrator')">
-                                    <i class="fas fa-brain"></i> Thinking
-                                </button>
-                            </div>
-                            <!-- Message container for orchestrator updates -->
+                            <!-- New message container for orchestrator updates -->
                             <div class="agent-message"></div>
                             <div class="agent-result-container hidden">
                                 <div class="agent-result"></div>
@@ -432,12 +397,10 @@
             </div>
             <div class="approval-body">
                 <p>Please review the result from this agent and approve to continue:</p>
-                <div class="approval-result">
-                    <!-- Content will be dynamically inserted here -->
-                </div>
+                <div class="approval-result"></div>
             </div>
             <div class="approval-actions">
-                <button class="reject-button" id="reject-approval">Reject</button>
+                <button class="btn secondary" id="cancel-approval">Cancel</button>
                 <button class="btn primary approve-button">Approve</button>
             </div>
         </div>

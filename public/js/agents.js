@@ -380,149 +380,60 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Approve a step with potentially edited content
-  //   async function approveStep(step) {
-  //     try {
-  //       // Get the edited content if available
-  //       const editedContent = agentSystem.workflow.editedResults[step];
-
-  //       // Create the payload, including edited content if available
-  //       const payload = {
-  //         sessionId: agentSystem.sessionId,
-  //         step: step,
-  //       };
-
-  //       if (editedContent) {
-  //         payload.editedContent = editedContent;
-  //       }
-
-  //       const response = await fetch("/api/agents/approve", {
-  //         method: "POST",
-  //         headers: {
-  //           "Content-Type": "application/json",
-  //           Authorization: `Bearer ${auth.getAccessToken()}`,
-  //         },
-  //         body: JSON.stringify(payload),
-  //       });
-
-  //       if (!response.ok) {
-  //         const errorData = await response.json();
-  //         throw new Error(errorData.message || "Failed to approve step");
-  //       }
-
-  //       // Also send via socket for redundancy
-  //       agentSystem.socket.emit("approveStep", payload);
-
-  //       hideApprovalModal();
-
-  //       // Properly mark the step as completed
-  //       agentSystem.agents[step].status = "completed";
-  //       agentSystem.workflow.pendingApproval = null;
-
-  //       console.log("Step approved:", step);
-
-  //       // Add orchestrator message
-  //       addOrchestratorMessage(
-  //         `${step} approved${
-  //           editedContent ? " with edits" : ""
-  //         }. Continuing workflow.`
-  //       );
-
-  //       updateUI();
-  //     } catch (error) {
-  //       console.error("Error approving step:", error);
-  //       alert(`Failed to approve step: ${error.message}`);
-
-  //       // Add error to orchestrator
-  //       addOrchestratorMessage(`Error approving step: ${error.message}`, true);
-  //     }
-  //   }
-
-  // Improved function to save edited content and ensure it's used
-  function approveStep(step) {
+  async function approveStep(step) {
     try {
-      // Get the edited content from the modal
-      const editableDiv = document.querySelector(
-        `.approval-modal .editable-content`
-      );
-      let editedContent = null;
+      // Get the edited content if available
+      const editedContent = agentSystem.workflow.editedResults[step];
 
-      if (editableDiv) {
-        editedContent = editableDiv.textContent.trim();
-
-        // Log the edited content to verify
-        console.log(`Saving edited content for ${step}:`, editedContent);
-
-        // Store in our local state for UI updates
-        agentSystem.workflow.editedResults[step] = editedContent;
-      }
-
-      // Show loading state
-      const approveButton = document.querySelector(
-        ".approval-modal .approve-button"
-      );
-      const originalText = approveButton.textContent;
-      approveButton.textContent = "Approving...";
-      approveButton.disabled = true;
-
-      // Create the payload, including edited content
+      // Create the payload, including edited content if available
       const payload = {
         sessionId: agentSystem.sessionId,
         step: step,
-        editedContent: editedContent,
       };
 
-      console.log("Sending approval with payload:", payload);
+      if (editedContent) {
+        payload.editedContent = editedContent;
+      }
 
-      // Send to server and via socket
-      Promise.all([
-        // RESTful API call
-        fetch("/api/agents/approve", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${auth.getAccessToken()}`,
-          },
-          body: JSON.stringify(payload),
-        }),
+      const response = await fetch("/api/agents/approve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${auth.getAccessToken()}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-        // Also emit via socket for redundancy
-        new Promise((resolve) => {
-          agentSystem.socket.emit("approveStep", payload);
-          resolve();
-        }),
-      ])
-        .then(([response]) => {
-          if (!response.ok) {
-            throw new Error(
-              `Server returned ${response.status}: ${response.statusText}`
-            );
-          }
-          return response.json();
-        })
-        .then((data) => {
-          console.log("Step approved successfully:", data);
-          hideApprovalModal();
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to approve step");
+      }
 
-          // Mark the step as completed
-          agentSystem.agents[step].status = "completed";
-          agentSystem.workflow.pendingApproval = null;
+      // Also send via socket for redundancy
+      agentSystem.socket.emit("approveStep", payload);
 
-          // Add orchestrator message
-          addOrchestratorMessage(
-            `${step} approved with edited content. Continuing workflow.`
-          );
+      hideApprovalModal();
 
-          updateUI();
-        })
-        .catch((error) => {
-          console.error("Error approving step:", error);
-          alert(`Error: ${error.message}`);
-          approveButton.textContent = originalText;
-          approveButton.disabled = false;
-        });
+      // Properly mark the step as completed
+      agentSystem.agents[step].status = "completed";
+      agentSystem.workflow.pendingApproval = null;
+
+      console.log("Step approved:", step);
+
+      // Add orchestrator message
+      addOrchestratorMessage(
+        `${step} approved${
+          editedContent ? " with edits" : ""
+        }. Continuing workflow.`
+      );
+
+      updateUI();
     } catch (error) {
-      console.error("Error in approveStep:", error);
-      alert(`Error approving step: ${error.message}`);
+      console.error("Error approving step:", error);
+      alert(`Failed to approve step: ${error.message}`);
+
+      // Add error to orchestrator
+      addOrchestratorMessage(`Error approving step: ${error.message}`, true);
     }
   }
 
@@ -794,45 +705,52 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Update result with markdown if available
       const resultElement = cardElement.querySelector(".agent-result");
-      // In agents.js, update how results are displayed
       if (resultElement && agentData.result) {
         let outputContent = "";
-        let fullOutputContent = "";
 
         if (typeof agentData.result === "object") {
-          if (agentData.result.summarizedOutput) {
-            outputContent = agentData.result.summarizedOutput;
-            fullOutputContent = agentData.result.output;
-          } else if (agentData.result.output) {
+          if (agentData.result.output) {
             outputContent = agentData.result.output;
-            fullOutputContent = agentData.result.output;
           } else {
             outputContent = JSON.stringify(agentData.result, null, 2);
-            fullOutputContent = outputContent;
           }
         } else {
           outputContent = agentData.result;
-          fullOutputContent = agentData.result;
         }
 
         // Check if we have an edited version of this content
         if (agentSystem.workflow.editedResults[agentKey]) {
           outputContent = agentSystem.workflow.editedResults[agentKey];
-          fullOutputContent = agentSystem.workflow.editedResults[agentKey];
         }
 
-        // Create editable content area with both summarized and full views
+        // Create editable content area
         resultElement.innerHTML = `
-      <div class="summarized-view">${md.render(outputContent)}</div>
-      <div class="full-content hidden">${md.render(fullOutputContent)}</div>
-      <div id="${agentKey}-editable" class="editable-content hidden" contenteditable="true">${fullOutputContent}</div>
-      <div class="editor-controls">
-        <button class="btn view-toggle-btn">Show Full Content</button>
-        <button class="btn editor-toggle-btn">Edit</button>
-        <button class="btn editor-save-btn" onclick="saveEditedResult('${agentKey}')">Save Changes</button>
-        <span id="${agentKey}-save-confirmation" class="save-confirmation">Changes saved!</span>
-      </div>
-    `;
+            <div class="markdown-view">${md.render(outputContent)}</div>
+            <div id="${agentKey}-editable" class="editable-content" contenteditable="true">${outputContent}</div>
+            <div class="editor-controls">
+              <button class="btn editor-toggle-btn">Toggle Editor</button>
+              <button class="btn editor-save-btn" onclick="saveEditedResult('${agentKey}')">Save Changes</button>
+              <span id="${agentKey}-save-confirmation" class="save-confirmation">Changes saved!</span>
+            </div>
+          `;
+
+        // Add toggle functionality
+        const toggleBtn = resultElement.querySelector(".editor-toggle-btn");
+        const markdownView = resultElement.querySelector(".markdown-view");
+        const editableView = resultElement.querySelector(".editable-content");
+
+        toggleBtn.addEventListener("click", () => {
+          markdownView.classList.toggle("hidden");
+          editableView.classList.toggle("hidden");
+          toggleBtn.textContent = markdownView.classList.contains("hidden")
+            ? "Preview"
+            : "Edit";
+        });
+
+        // Initially hide the editable view
+        editableView.classList.add("hidden");
+
+        resultElement.parentElement.classList.remove("hidden");
       }
 
       // Show approve button if waiting for approval
@@ -892,69 +810,6 @@ document.addEventListener("DOMContentLoaded", () => {
     drawAgentConnections();
   }
 
-  function showThinkingProcess(agentKey) {
-    const card = document.getElementById(`${agentKey}-card`);
-    if (!card) return;
-
-    const thinkingContainer = card.querySelector(".thinking-container");
-    const thinkingContent = card.querySelector(".thinking-content");
-
-    if (!thinkingContainer || !thinkingContent) {
-      console.error(`Thinking container elements not found for ${agentKey}`);
-      return;
-    }
-
-    // Show the thinking container
-    thinkingContainer.classList.remove("hidden");
-    thinkingContent.textContent = "Loading thinking process...";
-
-    // Set up real-time updates if agent is processing
-    if (agentSystem.agents[agentKey].status === "processing") {
-      // Set up socket listener for thinking updates
-      agentSystem.socket.on("agentThinking", (data) => {
-        if (data.agent === agentKey) {
-          thinkingContent.textContent = data.thinking;
-          // Auto scroll to bottom
-          thinkingContent.scrollTop = thinkingContent.scrollHeight;
-        }
-      });
-    } else {
-      // Fetch existing thinking process
-      fetch(`/api/agents/thinking/${agentSystem.sessionId}/${agentKey}`, {
-        headers: {
-          Authorization: `Bearer ${auth.getAccessToken()}`,
-        },
-      })
-        .then((response) => {
-          if (!response.ok) throw new Error("Failed to fetch thinking process");
-          return response.json();
-        })
-        .then((data) => {
-          if (data.thinking) {
-            thinkingContent.textContent = data.thinking;
-          } else {
-            thinkingContent.textContent =
-              "No thinking process available for this agent yet.";
-          }
-        })
-        .catch((error) => {
-          console.error("Error fetching thinking process:", error);
-          thinkingContent.textContent =
-            "Error loading thinking process: " + error.message;
-        });
-    }
-
-    // Set up close button
-    const closeBtn = thinkingContainer.querySelector(".thinking-close");
-    if (closeBtn) {
-      closeBtn.onclick = () => {
-        thinkingContainer.classList.add("hidden");
-        // Remove socket listener if it exists
-        agentSystem.socket.off("agentThinking");
-      };
-    }
-  }
-
   // Show approval modal
   function showApprovalModal(step, result) {
     const modal = document.getElementById("approval-modal");
@@ -964,20 +819,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const titleElement = modal.querySelector(".approval-title");
     const resultElement = modal.querySelector(".approval-result");
     const approveButton = modal.querySelector(".approve-button");
-    const rejectButton = document
-      .getElementById("reject-approval")
-      .addEventListener("click", function () {
-        const step = agentSystem.workflow.pendingApproval;
-        if (step) {
-          if (
-            confirm(
-              "Are you sure you want to reject this result? This will terminate the entire workflow."
-            )
-          ) {
-            rejectCurrentStep();
-          }
-        }
-      });
 
     if (titleElement) {
       titleElement.textContent = `Approve results from ${step
@@ -1003,170 +844,66 @@ document.addEventListener("DOMContentLoaded", () => {
         outputContent = agentSystem.workflow.editedResults[step];
       }
 
-      // Clear previous content and create new editable area
-      resultElement.innerHTML = "";
+      // Create editable content area with markdown preview
+      resultElement.innerHTML = `
+          <div class="markdown-view">${md.render(outputContent)}</div>
+          <div id="modal-${step}-editable" class="editable-content" contenteditable="true">${outputContent}</div>
+          <div class="editor-controls">
+            <button class="btn editor-toggle-btn">Toggle Editor</button>
+            <button class="btn editor-save-btn" id="modal-save-btn">Save Changes</button>
+            <span id="modal-save-confirmation" class="save-confirmation">Changes saved!</span>
+          </div>
+        `;
 
-      // Create the editable div with proper styling
-      const editableDiv = document.createElement("div");
-      editableDiv.id = `modal-${step}-editable`;
-      editableDiv.className = "editable-content";
-      editableDiv.contentEditable = true;
-      editableDiv.textContent = outputContent;
+      // Add toggle functionality
+      const toggleBtn = resultElement.querySelector(".editor-toggle-btn");
+      const markdownView = resultElement.querySelector(".markdown-view");
+      const editableView = resultElement.querySelector(".editable-content");
 
-      // Add instructions for editing
-      const instructions = document.createElement("p");
-      instructions.className = "edit-instructions";
-      instructions.innerHTML =
-        '<i class="fas fa-edit"></i> This content is editable. Your changes will be passed to the next agent.';
+      toggleBtn.addEventListener("click", () => {
+        markdownView.classList.toggle("hidden");
+        editableView.classList.toggle("hidden");
+        toggleBtn.textContent = markdownView.classList.contains("hidden")
+          ? "Preview"
+          : "Edit";
+      });
 
-      // Append everything to the result element
-      resultElement.appendChild(instructions);
-      resultElement.appendChild(editableDiv);
+      // Add save functionality
+      const saveBtn = resultElement.querySelector("#modal-save-btn");
+      saveBtn.addEventListener("click", () => {
+        const content = editableView.innerText;
+        agentSystem.workflow.editedResults[step] = content;
+        markdownView.innerHTML = md.render(content);
+
+        const saveConfirm = resultElement.querySelector(
+          "#modal-save-confirmation"
+        );
+        saveConfirm.classList.add("visible");
+        setTimeout(() => {
+          saveConfirm.classList.remove("visible");
+        }, 2000);
+
+        // Add orchestrator message
+        addOrchestratorMessage(
+          `User edited content for ${step} in approval modal. Changes saved.`
+        );
+      });
+
+      // Initially hide the editable view
+      editableView.classList.add("hidden");
     }
 
     if (approveButton) {
-      approveButton.onclick = () => {
-        // Get the edited content before approving
-        const editableDiv = document.getElementById(`modal-${step}-editable`);
-        if (editableDiv) {
-          const editedContent = editableDiv.textContent.trim();
-          agentSystem.workflow.editedResults[step] = editedContent;
-
-          // Now approve with the edited content
-          approveStep(step, editedContent);
-        } else {
-          approveStep(step);
-        }
-      };
-    }
-
-    if (rejectButton) {
-      rejectButton.onclick = () => {
-        if (
-          confirm(
-            "Are you sure you want to reject this result? This will terminate the entire workflow."
-          )
-        ) {
-          rejectCurrentStep();
-        }
-      };
+      approveButton.onclick = () => approveStep(step);
     }
 
     // Show modal
     modal.classList.add("active");
-  }
 
-  // Make sure the rejectCurrentStep function is properly defined and called
-  //   function rejectCurrentStep() {
-  //     const step = agentSystem.workflow.pendingApproval;
-
-  //     // Set termination flag
-  //     agentSystem.terminationRequested = true;
-
-  //     // Notify server
-  //     fetch("/api/agents/reject", {
-  //       method: "POST",
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //         Authorization: `Bearer ${auth.getAccessToken()}`,
-  //       },
-  //       body: JSON.stringify({
-  //         sessionId: agentSystem.sessionId,
-  //         step: step,
-  //       }),
-  //     })
-  //       .then((response) => {
-  //         if (!response.ok) throw new Error("Failed to reject step");
-  //         return response.json();
-  //       })
-  //       .then((data) => {
-  //         console.log("Step rejected successfully:", data);
-  //         hideApprovalModal();
-  //         addOrchestratorMessage(
-  //           `User rejected ${step} result. Terminating workflow.`,
-  //           true
-  //         );
-  //       })
-  //       .catch((error) => {
-  //         console.error("Error rejecting step:", error);
-  //         alert(`Error: ${error.message}`);
-  //       });
-  //   }
-
-  // Improved rejection function
-  function rejectCurrentStep() {
-    const step = agentSystem.workflow.pendingApproval;
-    if (!step || !agentSystem.sessionId) {
-      console.error("Cannot reject: missing step or session information");
-      alert("Cannot reject at this time. Missing necessary information.");
-      return;
-    }
-
-    // Show loading indicator
-    const rejectButton = document.getElementById("reject-approval");
-    const originalText = rejectButton.textContent;
-    rejectButton.textContent = "Rejecting...";
-    rejectButton.disabled = true;
-
-    // Notify server via both socket and REST API for redundancy
-    agentSystem.socket.emit("rejectStep", {
-      sessionId: agentSystem.sessionId,
-      step: step,
-    });
-
-    fetch("/api/agents/reject", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${auth.getAccessToken()}`,
-      },
-      body: JSON.stringify({
-        sessionId: agentSystem.sessionId,
-        step: step,
-      }),
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(
-            `Server returned ${response.status}: ${response.statusText}`
-          );
-        }
-        return response.json();
-      })
-      .then((data) => {
-        console.log("Step rejected successfully:", data);
-        hideApprovalModal();
-
-        // Update UI to show termination
-        for (const key in agentSystem.agents) {
-          if (key !== "orchestrator") {
-            agentSystem.agents[key].status = "idle";
-          }
-        }
-        agentSystem.agents.orchestrator.status = "error";
-
-        // Add message to orchestrator
-        addOrchestratorMessage(
-          `Workflow terminated: User rejected results from ${step}`,
-          true
-        );
-
-        // Update workflow state
-        agentSystem.workflow.started = false;
-        agentSystem.workflow.completed = true;
-        agentSystem.terminationRequested = true;
-
-        updateUI();
-
-        // Alert user
-        alert("Workflow terminated. You can start a new analysis when ready.");
-      })
-      .catch((error) => {
-        console.error("Error rejecting step:", error);
-        alert(`Error rejecting step: ${error.message}. Please try again.`);
-        rejectButton.textContent = originalText;
-        rejectButton.disabled = false;
-      });
+    // Add orchestrator message
+    addOrchestratorMessage(
+      `Waiting for user approval on ${step}. Modal displayed.`
+    );
   }
 
   // Hide approval modal

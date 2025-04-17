@@ -2,7 +2,7 @@
  * User Feedback Agent (A51)
  * Collects and processes user feedback on presented analogies
  */
-const BaseAgent = require("../BaseAgent");
+const BaseAgent = require("../baseAgent");
 const config = require("../../config/config");
 
 class UserFeedbackAgent extends BaseAgent {

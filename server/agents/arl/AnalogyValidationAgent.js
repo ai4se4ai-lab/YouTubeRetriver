@@ -2,7 +2,7 @@
  * Analogy Validation Agent (A32)
  * Evaluates generated analogies for accuracy, relevance, and educational value
  */
-const BaseAgent = require("../BaseAgent");
+const BaseAgent = require("../baseAgent");
 const config = require("../../config/config");
 
 class AnalogyValidationAgent extends BaseAgent {

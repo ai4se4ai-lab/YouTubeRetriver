@@ -33,8 +33,6 @@ class AgentManager extends EventEmitter {
     this.processingHistory = [];
     this.currentState = {};
     this.activeSession = null;
-    this.agentThinking = new Map(); // Store thinking processes by sessionId/agent
-    this.monitorIntervalId = null; // Monitor interval for the orchestrator
   }
 
   /**
@@ -49,18 +47,11 @@ class AgentManager extends EventEmitter {
       sessionId: this.activeSession,
       startTime: Date.now(),
       completed: false,
-      terminatedEarly: false,
-      terminationReason: null,
       steps: [],
     };
 
     // Reset all agents
     Object.values(this.agents).forEach((agent) => agent.reset());
-
-    // Initialize thinking map for this session
-    if (!this.agentThinking.has(this.activeSession)) {
-      this.agentThinking.set(this.activeSession, new Map());
-    }
 
     return this.activeSession;
   }
@@ -105,11 +96,6 @@ class AgentManager extends EventEmitter {
       hasError: !!result.error,
     });
 
-    // Store thinking process if available
-    if (result.thinking) {
-      this.storeAgentThinking(this.activeSession, agentName, result.thinking);
-    }
-
     // Emit update event
     this.emit("stateUpdate", {
       agent: agentName,
@@ -118,40 +104,8 @@ class AgentManager extends EventEmitter {
     });
   }
 
-  /**
-   * Store an agent's thinking process
-   * @param {string} sessionId - Session ID
-   * @param {string} agentKey - Agent key
-   * @param {string} thinking - Thinking process content
-   */
-  storeAgentThinking(sessionId, agentKey, thinking) {
-    if (!this.agentThinking.has(sessionId)) {
-      this.agentThinking.set(sessionId, new Map());
-    }
-
-    this.agentThinking.get(sessionId).set(agentKey, thinking);
-
-    // Emit event
-    this.emit("agentThinking", {
-      sessionId,
-      agent: agentKey,
-      thinking,
-    });
-  }
-
-  /**
-   * Get an agent's thinking process
-   * @param {string} sessionId - Session ID
-   * @param {string} agentKey - Agent key
-   * @returns {string|null} - The thinking process or null if not found
-   */
-  getAgentThinking(sessionId, agentKey) {
-    if (!this.agentThinking.has(sessionId)) {
-      return null;
-    }
-
-    return this.agentThinking.get(sessionId).get(agentKey) || null;
-  }
+  // Monitor interval for the orchestrator
+  #monitorIntervalId = null;
 
   /**
    * Run the full agent workflow
@@ -176,27 +130,16 @@ class AgentManager extends EventEmitter {
       this.updateState("orchestrator", workflowPlan);
 
       // Start the orchestrator monitoring
-      this.startOrchestratorMonitoring();
+      this.#startOrchestratorMonitoring();
 
       // Step 1: Content Analysis
       this.emit("processingStep", {
         step: "contentAnalysis",
         status: "starting",
       });
-
-      // Define thinking callback for real-time updates
-      const contentAnalysisThinkingCallback = (thinking) => {
-        this.storeAgentThinking(
-          this.activeSession,
-          "contentAnalysis",
-          thinking
-        );
-      };
-
       const formattedData = this.agents.contentAnalysis.formatData(youtubeData);
       const contentAnalysisResult = await this.agents.contentAnalysis.analyze(
-        formattedData,
-        contentAnalysisThinkingCallback
+        formattedData
       );
       this.updateState("contentAnalysis", contentAnalysisResult);
 
@@ -207,13 +150,13 @@ class AgentManager extends EventEmitter {
       );
 
       // Create a modified result object that preserves the original structure but with updated content
-      const finalContentAnalysis = this.mergeEditedContent(
+      const finalContentAnalysis = this.#mergeEditedContent(
         contentAnalysisResult,
         approvedContentAnalysis
       );
 
       // Update orchestrator about progress
-      await this.updateOrchestrator(
+      await this.#updateOrchestrator(
         "Content Analysis completed, moving to Knowledge Retrieval"
       );
 
@@ -223,20 +166,10 @@ class AgentManager extends EventEmitter {
         status: "starting",
       });
 
-      // Define thinking callback for this agent
-      const knowledgeThinkingCallback = (thinking) => {
-        this.storeAgentThinking(
-          this.activeSession,
-          "knowledgeRetrieval",
-          thinking
-        );
-      };
-
       // Pass the potentially edited content to the knowledge retrieval agent
       const knowledgeResult =
         await this.agents.knowledgeRetrieval.retrieveKnowledge(
-          finalContentAnalysis,
-          knowledgeThinkingCallback
+          finalContentAnalysis
         );
       this.updateState("knowledgeRetrieval", knowledgeResult);
 
@@ -247,13 +180,13 @@ class AgentManager extends EventEmitter {
       );
 
       // Merge edited content if any
-      const finalKnowledgeResult = this.mergeEditedContent(
+      const finalKnowledgeResult = this.#mergeEditedContent(
         knowledgeResult,
         approvedKnowledgeResult
       );
 
       // Update orchestrator about progress
-      await this.updateOrchestrator(
+      await this.#updateOrchestrator(
         "Knowledge Retrieval completed, moving to Analogy Generation"
       );
 
@@ -263,15 +196,6 @@ class AgentManager extends EventEmitter {
         status: "starting",
       });
 
-      // Define thinking callback
-      const analogyGenThinkingCallback = (thinking) => {
-        this.storeAgentThinking(
-          this.activeSession,
-          "analogyGeneration",
-          thinking
-        );
-      };
-
       // Pass both potentially edited content objects to the analogy generation
       const combinedInput = {
         contentAnalysis: finalContentAnalysis,
@@ -279,10 +203,7 @@ class AgentManager extends EventEmitter {
       };
 
       const analogiesResult =
-        await this.agents.analogyGeneration.generateAnalogies(
-          combinedInput,
-          analogyGenThinkingCallback
-        );
+        await this.agents.analogyGeneration.generateAnalogies(combinedInput);
       this.updateState("analogyGeneration", analogiesResult);
 
       // Wait for user approval and get edited content if any
@@ -292,13 +213,13 @@ class AgentManager extends EventEmitter {
       );
 
       // Merge edited content if any
-      const finalAnalogiesResult = this.mergeEditedContent(
+      const finalAnalogiesResult = this.#mergeEditedContent(
         analogiesResult,
         approvedAnalogiesResult
       );
 
       // Update orchestrator about progress
-      await this.updateOrchestrator(
+      await this.#updateOrchestrator(
         "Analogy Generation completed, moving to Analogy Validation"
       );
 
@@ -308,21 +229,11 @@ class AgentManager extends EventEmitter {
         status: "starting",
       });
 
-      // Define thinking callback
-      const validationThinkingCallback = (thinking) => {
-        this.storeAgentThinking(
-          this.activeSession,
-          "analogyValidation",
-          thinking
-        );
-      };
-
       // Pass the potentially edited content to validation
       const validationResult =
         await this.agents.analogyValidation.validateAnalogies(
           finalAnalogiesResult,
-          combinedInput,
-          validationThinkingCallback
+          combinedInput
         );
       this.updateState("analogyValidation", validationResult);
 
@@ -333,13 +244,13 @@ class AgentManager extends EventEmitter {
       );
 
       // Merge edited content if any
-      const finalValidationResult = this.mergeEditedContent(
+      const finalValidationResult = this.#mergeEditedContent(
         validationResult,
         approvedValidationResult
       );
 
       // Update orchestrator about progress
-      await this.updateOrchestrator(
+      await this.#updateOrchestrator(
         "Analogy Validation completed, moving to Analogy Refinement"
       );
 
@@ -349,21 +260,11 @@ class AgentManager extends EventEmitter {
         status: "starting",
       });
 
-      // Define thinking callback
-      const refinementThinkingCallback = (thinking) => {
-        this.storeAgentThinking(
-          this.activeSession,
-          "analogyRefinement",
-          thinking
-        );
-      };
-
       // Pass potentially edited content to refinement
       const refinementResult =
         await this.agents.analogyRefinement.refineAnalogies(
           finalValidationResult,
-          finalAnalogiesResult,
-          refinementThinkingCallback
+          finalAnalogiesResult
         );
       this.updateState("analogyRefinement", refinementResult);
 
@@ -374,32 +275,23 @@ class AgentManager extends EventEmitter {
       );
 
       // Merge edited content if any
-      const finalRefinementResult = this.mergeEditedContent(
+      const finalRefinementResult = this.#mergeEditedContent(
         refinementResult,
         approvedRefinementResult
       );
 
       // Update orchestrator about progress
-      await this.updateOrchestrator(
+      await this.#updateOrchestrator(
         "Analogy Refinement completed, moving to Explanation Generation"
       );
 
       // Step 6: Explanation Generation
-      this.emit("processingStep", {
-        step: "explanation",
-        status: "starting",
-      });
-
-      // Define thinking callback
-      const explanationThinkingCallback = (thinking) => {
-        this.storeAgentThinking(this.activeSession, "explanation", thinking);
-      };
+      this.emit("processingStep", { step: "explanation", status: "starting" });
 
       // Pass potentially edited content to explanation
       const explanationResult = await this.agents.explanation.createExplanation(
         finalRefinementResult,
-        { contentAnalysis: finalContentAnalysis },
-        explanationThinkingCallback
+        { contentAnalysis: finalContentAnalysis }
       );
       this.updateState("explanation", explanationResult);
 
@@ -410,13 +302,13 @@ class AgentManager extends EventEmitter {
       );
 
       // Merge edited content if any
-      const finalExplanationResult = this.mergeEditedContent(
+      const finalExplanationResult = this.#mergeEditedContent(
         explanationResult,
         approvedExplanationResult
       );
 
       // Update orchestrator about completion
-      await this.updateOrchestrator(
+      await this.#updateOrchestrator(
         "Explanation Generation completed, workflow is now complete"
       );
 
@@ -427,7 +319,7 @@ class AgentManager extends EventEmitter {
         this.currentState.endTime - this.currentState.startTime;
 
       // Stop the orchestrator monitoring
-      this.stopOrchestratorMonitoring();
+      this.#stopOrchestratorMonitoring();
 
       // Summarize workflow
       const workflowSummary = await this.agents.orchestrator.summarizeWorkflow(
@@ -452,7 +344,7 @@ class AgentManager extends EventEmitter {
         this.currentState.endTime - this.currentState.startTime;
 
       // Stop the orchestrator monitoring on error
-      this.stopOrchestratorMonitoring();
+      this.#stopOrchestratorMonitoring();
 
       this.emit("error", {
         message: error.message,
@@ -465,13 +357,14 @@ class AgentManager extends EventEmitter {
 
   /**
    * Start continuous orchestrator monitoring
+   * @private
    */
-  startOrchestratorMonitoring() {
+  #startOrchestratorMonitoring() {
     // Clear any existing interval
-    this.stopOrchestratorMonitoring();
+    this.#stopOrchestratorMonitoring();
 
     // Start a new monitoring interval - check every 10 seconds
-    this.monitorIntervalId = setInterval(async () => {
+    this.#monitorIntervalId = setInterval(async () => {
       try {
         // Get current state of all agents
         const agentStatuses = {};
@@ -508,19 +401,21 @@ class AgentManager extends EventEmitter {
 
   /**
    * Stop the orchestrator monitoring
+   * @private
    */
-  stopOrchestratorMonitoring() {
-    if (this.monitorIntervalId) {
-      clearInterval(this.monitorIntervalId);
-      this.monitorIntervalId = null;
+  #stopOrchestratorMonitoring() {
+    if (this.#monitorIntervalId) {
+      clearInterval(this.#monitorIntervalId);
+      this.#monitorIntervalId = null;
     }
   }
 
   /**
    * Update the orchestrator with the current step progress
    * @param {string} message - Progress message
+   * @private
    */
-  async updateOrchestrator(message) {
+  async #updateOrchestrator(message) {
     try {
       const updateResult = await this.agents.orchestrator.monitorWorkflow(
         {
@@ -548,8 +443,9 @@ class AgentManager extends EventEmitter {
    * @param {Object} originalResult - Original result object
    * @param {Object} editedResult - Potentially edited result object
    * @returns {Object} - Merged result object
+   * @private
    */
-  mergeEditedContent(originalResult, editedResult) {
+  #mergeEditedContent(originalResult, editedResult) {
     // If no edited content, return original
     if (!editedResult) {
       return originalResult;
@@ -576,38 +472,19 @@ class AgentManager extends EventEmitter {
     try {
       // Process user feedback
       this.emit("processingStep", { step: "userFeedback", status: "starting" });
-
-      // Define thinking callback
-      const feedbackThinkingCallback = (thinking) => {
-        this.storeAgentThinking(this.activeSession, "userFeedback", thinking);
-      };
-
       const feedbackResult = await this.agents.userFeedback.processFeedback(
         feedback,
-        explanationResult,
-        feedbackThinkingCallback
+        explanationResult
       );
       this.updateState("userFeedback", feedbackResult);
 
       // Generate learning insights
       this.emit("processingStep", { step: "learning", status: "starting" });
-
-      // Define thinking callback for learning agent
-      const learningThinkingCallback = (thinking) => {
-        this.storeAgentThinking(this.activeSession, "learning", thinking);
-      };
-
       const learningResult = await this.agents.learning.analyzeForImprovements(
         feedbackResult,
-        this.processingHistory,
-        learningThinkingCallback
+        this.processingHistory
       );
       this.updateState("learning", learningResult);
-
-      // Update orchestrator
-      await this.updateOrchestrator(
-        "Feedback processed and analyzed by learning agent"
-      );
 
       return {
         feedback: feedbackResult,
@@ -617,118 +494,6 @@ class AgentManager extends EventEmitter {
       console.error("Error processing feedback:", error);
       throw error;
     }
-  }
-
-  /**
-   * Request termination of a workflow
-   * @param {string} sessionId - Session ID
-   * @param {string} rejectedStep - Step that was rejected
-   * @param {string} reason - Reason for termination
-   * @returns {Promise<boolean>} - Success status
-   */
-  async requestTermination(sessionId, rejectedStep, reason) {
-    try {
-      // Check if this is the active session
-      if (this.activeSession !== sessionId) {
-        console.warn(
-          `Session mismatch: Active=${this.activeSession}, Requested=${sessionId}`
-        );
-        return false;
-      }
-
-      console.log(
-        `Termination requested for session ${sessionId} at step ${rejectedStep}: ${reason}`
-      );
-
-      // Set termination flag
-      this.isTerminated = true;
-
-      // Add a termination message via the orchestrator
-      const terminationResponse =
-        await this.agents.orchestrator.handleTermination({
-          sessionId,
-          rejectedStep,
-          reason,
-          timestamp: new Date().toISOString(),
-        });
-
-      // Update state
-      this.currentState.completed = true;
-      this.currentState.terminatedEarly = true;
-      this.currentState.terminationReason = reason;
-      this.currentState.endTime = Date.now();
-      this.currentState.totalDuration =
-        this.currentState.endTime - this.currentState.startTime;
-
-      // Stop monitoring
-      this.stopOrchestratorMonitoring();
-
-      // Update orchestrator status for UI
-      const updateResult = await this.agents.orchestrator.monitorWorkflow(
-        {
-          message: `Workflow terminated: ${reason}`,
-          timestamp: new Date().toISOString(),
-          currentState: this.currentState,
-          terminationRequested: true,
-        },
-        this.processingHistory.length > 0 ? this.processingHistory[0] : null
-      );
-
-      // Update state and emit event
-      this.updateState("orchestratorTermination", updateResult);
-
-      // Emit termination event
-      this.emit("workflowTerminated", {
-        sessionId,
-        rejectedStep,
-        reason,
-        timestamp: new Date().toISOString(),
-        message: "Workflow was terminated by user rejection",
-        alertUser: true,
-      });
-
-      return true;
-    } catch (error) {
-      console.error("Error requesting termination:", error);
-      return false;
-    }
-  }
-
-  /**
-   * Merge edited content with original result object
-   * @param {Object} originalResult - Original result object
-   * @param {Object} editedResult - Potentially edited result object
-   * @returns {Object} - Merged result object
-   */
-  mergeEditedContent(originalResult, editedResult) {
-    // If no edited content, return original
-    if (!editedResult) {
-      return originalResult;
-    }
-
-    // Create a copy of the original result
-    const mergedResult = JSON.parse(JSON.stringify(originalResult));
-
-    // If the edited result has updated output, use it
-    if (editedResult.result && editedResult.result.output) {
-      mergedResult.result.output = editedResult.result.output;
-
-      // Update summarized output if present
-      if (mergedResult.result.summarizedOutput) {
-        // Generate a new summarized output based on the edited content
-        mergedResult.result.summarizedOutput =
-          editedResult.result.output.split(/\s+/).length > 250
-            ? editedResult.result.output.split(/\s+/).slice(0, 240).join(" ") +
-              "... [Output truncated to 250 words. Click 'Show Full Content' to see full content]"
-            : editedResult.result.output;
-      }
-
-      console.log(
-        `Updated content with edited version and regenerated summary`
-      );
-    }
-
-    return mergedResult;
   }
 }
 

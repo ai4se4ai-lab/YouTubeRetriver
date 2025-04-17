@@ -2,7 +2,7 @@
  * Analogy Generation Agent (A31)
  * Creates analogies by mapping user interests to complex concepts
  */
-const BaseAgent = require("../BaseAgent");
+const BaseAgent = require("../baseAgent");
 const config = require("../../config/config");
 
 class AnalogyGenerationAgent extends BaseAgent {

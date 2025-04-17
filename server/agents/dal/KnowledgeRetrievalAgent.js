@@ -2,7 +2,7 @@
  * Knowledge Retrieval Agent (A22)
  * Accesses external knowledge bases to gather information on identified topics
  */
-const BaseAgent = require("../BaseAgent");
+const BaseAgent = require("../baseAgent");
 const config = require("../../config/config");
 
 class KnowledgeRetrievalAgent extends BaseAgent {

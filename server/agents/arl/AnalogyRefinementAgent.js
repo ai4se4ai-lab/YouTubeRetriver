@@ -2,7 +2,7 @@
  * Analogy Refinement Agent (A33)
  * Refines analogies based on validation feedback
  */
-const BaseAgent = require("../BaseAgent");
+const BaseAgent = require("../baseAgent");
 const config = require("../../config/config");
 
 class AnalogyRefinementAgent extends BaseAgent {
