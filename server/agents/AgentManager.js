@@ -630,6 +630,9 @@ class AgentManager extends EventEmitter {
     try {
       // Check if this is the active session
       if (this.activeSession !== sessionId) {
+        console.warn(
+          `Session mismatch: Active=${this.activeSession}, Requested=${sessionId}`
+        );
         return false;
       }
 
@@ -637,13 +640,17 @@ class AgentManager extends EventEmitter {
         `Termination requested for session ${sessionId} at step ${rejectedStep}: ${reason}`
       );
 
+      // Set termination flag
+      this.isTerminated = true;
+
       // Add a termination message via the orchestrator
-      await this.agents.orchestrator.handleTermination({
-        sessionId,
-        rejectedStep,
-        reason,
-        timestamp: new Date().toISOString(),
-      });
+      const terminationResponse =
+        await this.agents.orchestrator.handleTermination({
+          sessionId,
+          rejectedStep,
+          reason,
+          timestamp: new Date().toISOString(),
+        });
 
       // Update state
       this.currentState.completed = true;
@@ -664,7 +671,7 @@ class AgentManager extends EventEmitter {
           currentState: this.currentState,
           terminationRequested: true,
         },
-        this.processingHistory[0] // Original workflow plan
+        this.processingHistory.length > 0 ? this.processingHistory[0] : null
       );
 
       // Update state and emit event
@@ -685,6 +692,43 @@ class AgentManager extends EventEmitter {
       console.error("Error requesting termination:", error);
       return false;
     }
+  }
+
+  /**
+   * Merge edited content with original result object
+   * @param {Object} originalResult - Original result object
+   * @param {Object} editedResult - Potentially edited result object
+   * @returns {Object} - Merged result object
+   */
+  mergeEditedContent(originalResult, editedResult) {
+    // If no edited content, return original
+    if (!editedResult) {
+      return originalResult;
+    }
+
+    // Create a copy of the original result
+    const mergedResult = JSON.parse(JSON.stringify(originalResult));
+
+    // If the edited result has updated output, use it
+    if (editedResult.result && editedResult.result.output) {
+      mergedResult.result.output = editedResult.result.output;
+
+      // Update summarized output if present
+      if (mergedResult.result.summarizedOutput) {
+        // Generate a new summarized output based on the edited content
+        mergedResult.result.summarizedOutput =
+          editedResult.result.output.split(/\s+/).length > 250
+            ? editedResult.result.output.split(/\s+/).slice(0, 240).join(" ") +
+              "... [Output truncated to 250 words. Click 'Show Full Content' to see full content]"
+            : editedResult.result.output;
+      }
+
+      console.log(
+        `Updated content with edited version and regenerated summary`
+      );
+    }
+
+    return mergedResult;
   }
 }
 

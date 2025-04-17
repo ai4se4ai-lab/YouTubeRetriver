@@ -57,13 +57,14 @@
     margin-bottom: 15px;
 }
 
-.agent-cards {
+ds {
     display: flex;
     flex-wrap: wrap;
     gap: 15px;
     justify-content: center;
 }
 
+/* Improve agent card styling for thinking display */
 .agent-card {
     width: 100%;
     border-radius: var(--border-radius);
@@ -72,9 +73,11 @@
     box-shadow: var(--box-shadow);
     transition: var(--transition);
     position: relative;
-    overflow: hidden;
+    overflow: visible; /* Changed from hidden to allow thinking container to expand */
     z-index: 10;
-}
+    display: flex;
+    flex-direction: column;
+  }
 
 .agent-card:hover {
     transform: translateY(-3px);
@@ -480,8 +483,8 @@
     z-index: 1000;
     opacity: 0;
     visibility: hidden;
-    transition: var(--transition);
-}
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+  }
 
 .approval-modal.active {
     opacity: 1;
@@ -528,6 +531,7 @@
     white-space: pre-wrap;
     overflow-y: auto;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+    font-size: 0.9rem;
   }
   
   .approval-result .edit-instructions {
@@ -543,32 +547,45 @@
     margin-right: 5px;
   }
 
+/* Fix the approve/reject buttons styling */
 .approval-actions {
     padding: 15px;
     display: flex;
     justify-content: flex-end;
-    gap: 10px;
+    gap: 15px; /* Increased gap for better separation */
     border-top: 1px solid var(--gray);
-}
+  }
 
-/* Approval button styling - make it more prominent */
-.approval-modal .approve-button {
-    font-weight: bold;
-    padding: 8px 16px;
-}
-
-/* Improved styling for the reject button */
-.reject-button {
-    background-color: #f44336;
+  .approval-modal .approve-button {
+    background-color: #4CAF50; /* Green for approve */
     color: white;
-    padding: 10px 16px;
+    font-weight: bold;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    min-width: 100px;
+  }
+
+  .approval-modal .approve-button:hover {
+    background-color: #45a049;
+  }
+  
+  .approval-modal .approve-button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+
+  .reject-button {
+    background-color: #f44336; /* Red for reject */
+    color: white;
+    padding: 10px 20px;
     border: none;
     border-radius: 4px;
     font-weight: 600;
     cursor: pointer;
     transition: background-color 0.3s ease;
-    font-size: 0.9rem;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    min-width: 100px;
   }
   
   .reject-button:hover {
@@ -727,12 +744,17 @@
     gap: 10px;
 }
 
+/* Improved thinking container styling */
 .thinking-container {
     margin-top: 15px;
+    margin-bottom: 15px;
     border: 1px solid var(--accent-color);
     border-radius: var(--border-radius);
     background-color: var(--light-gray);
     overflow: hidden;
+    max-height: 300px;
+    display: flex;
+    flex-direction: column;
   }
   
   .thinking-header {
@@ -742,11 +764,11 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    font-size: 0.9rem;
   }
   
   .thinking-title {
     font-weight: 600;
-    font-size: 0.9rem;
   }
   
   .thinking-close {
@@ -760,7 +782,7 @@
   }
   
   .thinking-content {
-    max-height: 200px;
+    height: 200px;
     overflow-y: auto;
     padding: 12px;
     margin: 0;
@@ -769,7 +791,36 @@
     white-space: pre-wrap;
     background-color: white;
     border-top: 1px solid var(--gray);
+    flex-grow: 1;
   }
+  
+  /* Thinking button styling */
+  .thinking-btn {
+    background-color: var(--accent-color);
+    color: white;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    margin-right: 8px;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.2s;
+  }
+  
+  .thinking-btn:hover {
+    background-color: #3367d6;
+  }
+  
+  .thinking-btn:active {
+    background-color: #2a56b9;
+  }
+  
+  .thinking-btn i {
+    margin-right: 5px;
+    font-size: 0.9rem;
+  }  
   
   /* Styling for loading indicator */
   .thinking-loading {

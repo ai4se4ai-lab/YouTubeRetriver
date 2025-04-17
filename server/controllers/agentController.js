@@ -6,6 +6,8 @@ const agentService = require("../services/agentService");
 
 // Store active sessions and approval callbacks
 const pendingApprovals = new Map();
+// Global variable for socket.io instance
+let io;
 
 module.exports = {
   /**
@@ -88,6 +90,16 @@ module.exports = {
       if (editedContent) {
         if (approvedResult && approvedResult.result) {
           approvedResult.result.output = editedContent;
+          // Also update the summarized output
+          approvedResult.result.summarizedOutput =
+            approvedResult.result.output.split(/\s+/).length > 250
+              ? approvedResult.result.output
+                  .split(/\s+/)
+                  .slice(0, 240)
+                  .join(" ") +
+                "... [Output truncated to 250 words. Click 'Show Full Content' to see full content]"
+              : approvedResult.result.output;
+
           console.log(`Updated content for ${step} with edited version`);
         }
       }
@@ -126,6 +138,10 @@ module.exports = {
           .json({ error: "Session ID and step are required" });
       }
 
+      console.log(
+        `Reject request received for session ${sessionId}, step ${step}`
+      );
+
       // Get the agent manager
       const agentManager = agentService.getAgentManager();
 
@@ -141,16 +157,32 @@ module.exports = {
         pendingApprovals.has(sessionId) &&
         pendingApprovals.get(sessionId).has(step)
       ) {
+        // Get resolver to properly resolve the promise
+        const { resolve } = pendingApprovals.get(sessionId).get(step);
+        // Resolve with null to indicate rejection
+        resolve(null);
+        // Remove from pending map
         pendingApprovals.get(sessionId).delete(step);
+
+        console.log(
+          `Removed ${step} from pending approvals for session ${sessionId}`
+        );
       }
 
       // Notify all clients subscribed to this session
-      io.to(sessionId).emit("workflowTerminated", {
-        reason: "User rejected results",
-        step,
-        message: "Workflow terminated because results were rejected.",
-        alertUser: false,
-      });
+      if (io) {
+        io.to(sessionId).emit("workflowTerminated", {
+          reason: "User rejected results",
+          step,
+          message: "Workflow terminated because results were rejected.",
+          alertUser: true,
+          timestamp: new Date().toISOString(),
+        });
+
+        console.log(`Emitted workflowTerminated event to session ${sessionId}`);
+      } else {
+        console.error("IO instance not available for socket emissions");
+      }
 
       res.json({
         success: true,
@@ -307,9 +339,12 @@ module.exports = {
 
   /**
    * Set up WebSocket handlers
-   * @param {Object} io - Socket.IO instance
+   * @param {Object} socketIo - Socket.IO instance
    */
-  setupSocketHandlers(io) {
+  setupSocketHandlers(socketIo) {
+    // Store io instance for use in other methods
+    io = socketIo;
+
     io.on("connection", (socket) => {
       console.log("Client connected to agent socket");
 
@@ -327,7 +362,9 @@ module.exports = {
           pendingApprovals.has(sessionId) &&
           pendingApprovals.get(sessionId).has(step)
         ) {
-          console.log(`Step ${step} approved via socket`);
+          console.log(
+            `Step ${step} approved via socket with edited content: ${!!editedContent}`
+          );
 
           // Get the resolver function and result
           const { resolve, result } = pendingApprovals.get(sessionId).get(step);
@@ -339,6 +376,16 @@ module.exports = {
           if (editedContent) {
             if (approvedResult && approvedResult.result) {
               approvedResult.result.output = editedContent;
+              // Also update the summarized output for consistency
+              approvedResult.result.summarizedOutput =
+                approvedResult.result.output.split(/\s+/).length > 250
+                  ? approvedResult.result.output
+                      .split(/\s+/)
+                      .slice(0, 240)
+                      .join(" ") +
+                    "... [Output truncated to 250 words. Click 'Show Full Content' to see full content]"
+                  : approvedResult.result.output;
+
               console.log(
                 `Updated content for ${step} with edited version via socket`
               );
@@ -362,6 +409,9 @@ module.exports = {
       // Listen for step rejection
       socket.on("rejectStep", (data) => {
         const { sessionId, step } = data;
+        console.log(
+          `Received rejectStep via socket for session ${sessionId}, step ${step}`
+        );
 
         // Call the reject handler directly
         this.rejectStep(

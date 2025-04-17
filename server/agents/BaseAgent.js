@@ -23,16 +23,10 @@ class BaseAgent {
   }
 
   /**
-   * Process data through the agent
-   * @param {Object} data - Input data to process
-   * @param {string} prompt - Specific prompt for this processing
-   * @param {string} editedContent - Optional edited content from previous step
-   * @param {function} thinkingCallback - Optional callback to receive thinking updates
-   * @returns {Promise<Object>} - Processing result
+   * Summarize output to a maximum of 250 words
    * @param {string} output - The full output to summarize
    * @returns {string} - Summarized output (max 250 words)
    */
-
   summarizeOutput(output) {
     if (!output) return "";
 
@@ -46,26 +40,24 @@ class BaseAgent {
     // Add note about truncation
     return (
       truncated +
-      "... [Output truncated to 250 words. Click 'Show More' to see full content]"
+      "... [Output truncated to 250 words. Click 'Show Full Content' to see full content]"
     );
   }
 
-  async process(data, prompt, editedContent = null, thinkingCallback = null) {
+  /**
+   * Process data through the agent
+   * @param {Object} data - Input data to process
+   * @param {string} prompt - Specific prompt for this processing
+   * @param {function} thinkingCallback - Optional callback to receive thinking updates
+   * @returns {Promise<Object>} - Processing result
+   */
+  async process(data, prompt, thinkingCallback = null) {
     this.startTime = Date.now();
     this.processed = false;
     let thinking = "";
 
     try {
       console.log(`${this.name} starting processing...`);
-
-      // If we have edited content and it's relevant to this processing
-      // (e.g., it's from a previous agent that feeds into this one),
-      // we can incorporate it into our processing logic here
-      if (editedContent) {
-        console.log(`${this.name} processing with edited content`);
-        // You might need to update 'data' based on editedContent
-        // This is specific to each agent's implementation
-      }
 
       // Capture thinking process
       thinking = `Agent: ${this.name}\n`;
@@ -136,17 +128,13 @@ class BaseAgent {
         thinkingCallback(thinking);
       }
 
-      //   this.result = {
-      //     output: response.choices[0].message.content,
-      //     usage: response.usage,
-      //     model: response.model,
-      //   };
+      // Create result with both full output and summarized output
+      const fullOutput = response.choices[0].message.content;
+      const summarizedOutput = this.summarizeOutput(fullOutput);
 
       this.result = {
-        output: response.choices[0].message.content,
-        summarizedOutput: this.summarizeOutput(
-          response.choices[0].message.content
-        ),
+        output: fullOutput,
+        summarizedOutput: summarizedOutput,
         usage: response.usage,
         model: response.model,
       };
@@ -156,6 +144,9 @@ class BaseAgent {
 
       // Final thinking entry
       thinking += `[${new Date().toISOString()}] Processing completed successfully.\n`;
+      thinking += `[${new Date().toISOString()}] Summarized output to ${
+        summarizedOutput.split(/\s+/).length
+      } words from ${fullOutput.split(/\s+/).length} words.\n`;
     } catch (error) {
       console.error(`${this.name} processing error:`, error);
       this.error = error.message;
