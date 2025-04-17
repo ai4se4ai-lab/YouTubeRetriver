@@ -516,70 +516,91 @@ class GitAnalysisAgent extends BaseAgent {
    */
   async analyzeChanges() {
     try {
-      // Connect to repository if not connected
-      if (!this.isConnected) {
-        const connected = await this.connectToRepository();
-        if (!connected) {
-          throw new Error("Failed to connect to repository");
+      try {
+        console.log("GitAnalysisAgent: Starting analysis...");
+
+        // Connect to repository if not connected
+        if (!this.isConnected) {
+          console.log("GitAnalysisAgent: Connecting to repository...");
+          const connected = await this.connectToRepository();
+          console.log(
+            "GitAnalysisAgent: Repository connection result:",
+            connected
+          );
+          if (!connected) {
+            throw new Error("Failed to connect to repository");
+          }
         }
+
+        // Check for new changes
+        console.log("GitAnalysisAgent: Checking for changes...");
+        const changeData = await this.checkForChanges();
+        console.log("GitAnalysisAgent: Change data:", changeData);
+
+        // No changes or error
+        if (!changeData.hasChanges) {
+          console.log("GitAnalysisAgent: No changes detected");
+          return this.process({
+            status: "no_changes",
+            message: "No new commits to analyze",
+          });
+        }
+
+        // Get diff data
+        const diffData = await this.getCommitDiff(changeData.commitRange);
+
+        if (diffData.error) {
+          throw new Error(`Error getting diff: ${diffData.error}`);
+        }
+
+        // Run security scan on changed files
+        const securityResults = await this.runSecurityScan(
+          diffData.changedFiles
+        );
+
+        // Extract context around issues
+        const contextData = await this.extractContext(
+          securityResults,
+          diffData
+        );
+
+        // Process the results
+        const analysisResults = {
+          repositoryUrl: process.env.GIT_REPO_URL,
+          targetBranch: process.env.GIT_TARGET_BRANCH || "main",
+          commitData: changeData.commits,
+          diffSummary: {
+            insertions: diffData.insertions,
+            deletions: diffData.deletions,
+            changedFilesCount: diffData.changedFilesCount,
+            changedFiles: diffData.changedFiles.map((f) => f.file),
+          },
+          securityIssues: contextData.issuesWithContext,
+          securitySummary: {
+            totalIssues: contextData.totalIssues,
+            issuesBySeverity: contextData.issuesBySeverity,
+          },
+          analysisTimestamp: new Date().toISOString(),
+        };
+
+        // Process through LLM for analysis
+        return this.process(analysisResults, this.prompt);
+      } catch (error) {
+        console.error("Error analyzing changes:", error);
+        this.error = error.message;
+
+        // Return an error result
+        return {
+          name: this.name,
+          processed: false,
+          error: error.message,
+          result: null,
+        };
       }
-
-      // Check for new changes
-      const changeData = await this.checkForChanges();
-
-      // No changes or error
-      if (!changeData.hasChanges) {
-        return this.process({
-          status: "no_changes",
-          message: "No new commits to analyze",
-        });
-      }
-
-      // Get diff data
-      const diffData = await this.getCommitDiff(changeData.commitRange);
-
-      if (diffData.error) {
-        throw new Error(`Error getting diff: ${diffData.error}`);
-      }
-
-      // Run security scan on changed files
-      const securityResults = await this.runSecurityScan(diffData.changedFiles);
-
-      // Extract context around issues
-      const contextData = await this.extractContext(securityResults, diffData);
-
-      // Process the results
-      const analysisResults = {
-        repositoryUrl: process.env.GIT_REPO_URL,
-        targetBranch: process.env.GIT_TARGET_BRANCH || "main",
-        commitData: changeData.commits,
-        diffSummary: {
-          insertions: diffData.insertions,
-          deletions: diffData.deletions,
-          changedFilesCount: diffData.changedFilesCount,
-          changedFiles: diffData.changedFiles.map((f) => f.file),
-        },
-        securityIssues: contextData.issuesWithContext,
-        securitySummary: {
-          totalIssues: contextData.totalIssues,
-          issuesBySeverity: contextData.issuesBySeverity,
-        },
-        analysisTimestamp: new Date().toISOString(),
-      };
-
-      // Process through LLM for analysis
-      return this.process(analysisResults, this.prompt);
+      // Rest of the function...
     } catch (error) {
-      console.error("Error analyzing changes:", error);
-      this.error = error.message;
-
-      // Return an error result
-      return {
-        name: this.name,
-        processed: false,
-        error: error.message,
-        result: null,
-      };
+      console.error("GitAnalysisAgent: Error analyzing changes:", error);
+      // Rest of the error handling...
     }
   }
 }

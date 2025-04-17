@@ -231,10 +231,17 @@ document.addEventListener("DOMContentLoaded", () => {
         gitBranch: document.getElementById("git-branch")?.value || "main",
       };
 
-      // Validate Git options if enabled
-      if (options.enableGitAnalysis && !options.gitRepoUrl) {
-        alert("Please enter a Git repository URL for analysis.");
-        return;
+      // Validate if Git analysis is enabled
+      if (options.enableGitAnalysis) {
+        if (!options.gitRepoUrl) {
+          alert("Please enter a Git repository URL for analysis.");
+          return;
+        }
+        // Log for debugging
+        console.log("Git analysis enabled with options:", {
+          url: options.gitRepoUrl,
+          branch: options.gitBranch,
+        });
       }
 
       // Validate options
@@ -259,13 +266,14 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("results-section").classList.remove("hidden");
 
       // Start processing
+      // Make sure options are passed to the server
       const response = await fetch("/api/agents/process", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${auth.getAccessToken()}`,
         },
-        body: JSON.stringify({ options }),
+        body: JSON.stringify({ options }), // Make sure options are included here
       });
 
       if (!response.ok) {
@@ -1249,6 +1257,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Define connections between agents
     const connections = [
+      // Add Git Analysis Agent connections
+      { from: "gitAnalysis", to: "contentAnalysis" },
+      { from: "gitAnalysis", to: "analogyGeneration" },
+
+      // Existing connections
       { from: "contentAnalysis", to: "knowledgeRetrieval" },
       { from: "knowledgeRetrieval", to: "analogyGeneration" },
       { from: "analogyGeneration", to: "analogyValidation" },
@@ -1256,7 +1269,9 @@ document.addEventListener("DOMContentLoaded", () => {
       { from: "analogyRefinement", to: "explanation" },
       { from: "explanation", to: "userFeedback" },
       { from: "userFeedback", to: "learning" },
-      // Add connections from orchestrator to all agents
+
+      // Orchestrator connections - add connection to gitAnalysis
+      { from: "orchestrator", to: "gitAnalysis" },
       { from: "orchestrator", to: "contentAnalysis" },
       { from: "orchestrator", to: "knowledgeRetrieval" },
       { from: "orchestrator", to: "analogyGeneration" },

@@ -11,6 +11,14 @@ const config = {
     nodeEnv: process.env.NODE_ENV || "development",
   },
 
+  git: {
+    repoUrl: process.env.GIT_REPO_URL,
+    repoPath: process.env.GIT_REPO_PATH || "./temp/git-repo",
+    targetBranch: process.env.GIT_TARGET_BRANCH || "main",
+    username: process.env.GIT_USERNAME,
+    token: process.env.GIT_TOKEN,
+  },
+
   // Google OAuth settings
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,

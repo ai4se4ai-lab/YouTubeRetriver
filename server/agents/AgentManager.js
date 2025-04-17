@@ -35,6 +35,85 @@ class AgentManager extends EventEmitter {
     this.processingHistory = [];
     this.currentState = {};
     this.activeSession = null;
+    this.gitPollingInterval = null;
+  }
+
+  /**
+   * Stop Git repository polling
+   */
+  stopGitRepositoryPolling() {
+    if (this.gitPollingInterval) {
+      console.log("Stopping Git repository polling");
+      clearInterval(this.gitPollingInterval);
+      this.gitPollingInterval = null;
+    }
+  }
+
+  /**
+   * Start Git repository polling
+   * @param {Object} options - Options including Git repository settings
+   */
+  startGitRepositoryPolling(options) {
+    // Clear any existing polling
+    this.stopGitRepositoryPolling();
+
+    if (options && options.enableGitAnalysis) {
+      console.log("Starting Git repository polling");
+
+      // Poll every 60 seconds (adjust as needed)
+      this.gitPollingInterval = setInterval(async () => {
+        try {
+          console.log("Polling Git repository for changes");
+
+          // Get the Git Analysis Agent
+          const gitAgent = this.agents.gitAnalysis;
+
+          // Check for changes
+          if (gitAgent.isConnected) {
+            const changeData = await gitAgent.checkForChanges();
+
+            if (changeData.hasChanges) {
+              console.log("Git changes detected, triggering analysis");
+
+              // Emit event about new changes
+              this.emit("gitChangesDetected", {
+                changeData,
+                timestamp: new Date().toISOString(),
+              });
+
+              // If workflow is active, trigger Git analysis
+              if (
+                this.activeSession &&
+                !this.currentState.completed &&
+                !this.currentState.terminated
+              ) {
+                console.log("Running Git analysis as part of active workflow");
+
+                this.emit("processingStep", {
+                  step: "gitAnalysis",
+                  status: "starting",
+                });
+
+                const gitAnalysisResult = await gitAgent.analyzeChanges();
+                this.updateState("gitAnalysis", gitAnalysisResult);
+
+                // Update orchestrator about the Git analysis
+                await this.#updateOrchestrator(
+                  "New Git changes detected and analyzed during workflow"
+                );
+              }
+            } else {
+              console.log("No Git changes detected during polling");
+            }
+          } else {
+            console.log("Git agent not connected, attempting to connect");
+            await gitAgent.connectToRepository();
+          }
+        } catch (error) {
+          console.error("Error during Git repository polling:", error);
+        }
+      }, 60000); // 60 seconds
+    }
   }
 
   /**
@@ -43,6 +122,9 @@ class AgentManager extends EventEmitter {
    * @returns {string} - The active session ID
    */
   initSession(sessionId = null) {
+    // Stop any existing Git polling
+    this.stopGitRepositoryPolling();
+
     this.activeSession = sessionId || `session_${Date.now()}`;
     this.processingHistory = [];
     this.currentState = {
@@ -144,11 +226,17 @@ class AgentManager extends EventEmitter {
     }
 
     try {
+      // Start Git polling if enabled
+      if (options && options.enableGitAnalysis) {
+        this.startGitRepositoryPolling(options);
+      }
+
       // Plan workflow with orchestrator
       const workflowPlan = await this.agents.orchestrator.planWorkflow({
         dataType: "YouTube Data",
         availableAgents: Object.keys(this.agents),
         timestamp: Date.now(),
+        options: options, // Pass options to orchestrator
       });
 
       this.updateState("orchestrator", workflowPlan);
@@ -395,6 +483,9 @@ class AgentManager extends EventEmitter {
       // Stop the orchestrator monitoring
       this.#stopOrchestratorMonitoring();
 
+      // Stop Git polling when workflow completes
+      this.stopGitRepositoryPolling();
+
       // Summarize workflow
       const workflowSummary = await this.agents.orchestrator.summarizeWorkflow(
         this.processingHistory
@@ -419,6 +510,9 @@ class AgentManager extends EventEmitter {
 
       // Stop the orchestrator monitoring on error
       this.#stopOrchestratorMonitoring();
+
+      // Stop Git polling on error
+      this.stopGitRepositoryPolling();
 
       this.emit("error", {
         message: error.message,
@@ -588,6 +682,9 @@ class AgentManager extends EventEmitter {
       // Stop the orchestrator monitoring
       this.#stopOrchestratorMonitoring();
 
+      // Stop Git repository polling
+      this.stopGitRepositoryPolling();
+
       // Let orchestrator handle the termination
       const terminationSummary =
         await this.agents.orchestrator.handleTermination({
@@ -617,6 +714,44 @@ class AgentManager extends EventEmitter {
       return terminationSummary;
     } catch (error) {
       console.error("Error handling termination:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Manually trigger Git analysis for testing
+   * @returns {Promise<Object>} - Analysis results
+   */
+  async triggerGitAnalysis() {
+    try {
+      console.log("Manually triggering Git analysis");
+
+      // Get the Git Analysis Agent
+      const gitAgent = this.agents.gitAnalysis;
+
+      // Ensure connection
+      if (!gitAgent.isConnected) {
+        await gitAgent.connectToRepository();
+      }
+
+      // Emit processing step event
+      this.emit("processingStep", {
+        step: "gitAnalysis",
+        status: "starting",
+      });
+
+      // Run analysis
+      const gitAnalysisResult = await gitAgent.analyzeChanges();
+      this.updateState("gitAnalysis", gitAnalysisResult);
+
+      // Update orchestrator
+      await this.#updateOrchestrator(
+        "Manual Git analysis triggered and completed"
+      );
+
+      return gitAnalysisResult;
+    } catch (error) {
+      console.error("Error during manual Git analysis:", error);
       throw error;
     }
   }

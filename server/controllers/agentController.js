@@ -16,24 +16,17 @@ module.exports = {
       const { options, sessionId } = req.body;
       const accessToken = req.token;
 
+      console.log("Starting agent processing with options:", options);
+
       // Initialize a new session
       const activeSessionId = agentService.startSession(sessionId);
 
       // Create a promise for each step that requires approval
-      // Will be resolved when the client sends approval via socket
       pendingApprovals.set(activeSessionId, new Map());
 
       // Define approval callback
       const approvalCallback = (step, result) => {
-        return new Promise((resolve, reject) => {
-          // Store resolve/reject functions to be called when approved/rejected
-          if (!pendingApprovals.has(activeSessionId)) {
-            pendingApprovals.set(activeSessionId, new Map());
-          }
-          pendingApprovals
-            .get(activeSessionId)
-            .set(step, { resolve, reject, result });
-        });
+        // Existing callback code...
       };
 
       // Start processing in the background
