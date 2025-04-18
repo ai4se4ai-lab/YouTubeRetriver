@@ -299,7 +299,7 @@ document.addEventListener("DOMContentLoaded", () => {
         watchHistory: document.getElementById("watch-history").checked,
         maxResults: parseInt(document.getElementById("max-results").value, 10),
         enableGitAnalysis:
-          document.getElementById("git-analysis")?.checked || false,
+          document.getElementById("git-analysis").checked || false,
         gitRepoUrl: document.getElementById("git-repo-url")?.value || "",
         gitBranch: document.getElementById("git-branch")?.value || "main",
       };

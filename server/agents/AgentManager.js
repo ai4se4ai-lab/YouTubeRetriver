@@ -307,7 +307,6 @@ class AgentManager extends EventEmitter {
     };
 
     try {
-      console.log("git 1.");
       // Start Git polling if enabled
       if (options && options.enableGitAnalysis) {
         this.startGitRepositoryPolling(options);
@@ -334,10 +333,10 @@ class AgentManager extends EventEmitter {
           status: "starting",
         });
 
-        console.log(
-          "Before await this.agents.gitAnalysis.analyzeChanges() ...."
+        gitAnalysisResult = await this.agents.gitAnalysis.analyzeChanges(
+          this.activeSession,
+          options
         );
-        gitAnalysisResult = await this.agents.gitAnalysis.analyzeChanges();
         console.log("Git Analysis completed:", !!gitAnalysisResult);
         this.updateState("gitAnalysis", gitAnalysisResult);
 
@@ -361,6 +360,7 @@ class AgentManager extends EventEmitter {
         gitAnalysisResult = finalGitAnalysis;
         console.log("Git Analysis Result:", gitAnalysisResult);
       }
+      //}
 
       // Step 2: Content Analysis
       let contentAnalysisResult = null;
@@ -532,7 +532,10 @@ class AgentManager extends EventEmitter {
       );
 
       // Step 7: Explanation Generation
-      this.emit("processingStep", { step: "explanation", status: "starting" });
+      this.emit("processingStep", {
+        step: "explanation",
+        status: "starting",
+      });
 
       // Pass potentially edited content to explanation
       const explanationResult = await this.agents.explanation.createExplanation(

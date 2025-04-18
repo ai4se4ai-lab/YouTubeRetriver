@@ -73,10 +73,11 @@ module.exports = {
         );
       }
 
-      // Process data through agents
+      // Process data through agents - PASS THE OPTIONS PARAMETER HERE
       const results = await agentManager.runFullWorkflow(
         youtubeData,
-        approvalCallback
+        approvalCallback,
+        options // Make sure to pass options here
       );
       return results;
     } catch (error) {
