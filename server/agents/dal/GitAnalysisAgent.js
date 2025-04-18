@@ -64,40 +64,67 @@ class GitAnalysisAgent extends BaseAgent {
 
       if (!isRepo) {
         // Clone repo
-        await this.git.clone(formattedRepoUrl, repoPath);
-        console.log(`Repository cloned to ${repoPath}`);
-
-        // Checkout target branch
-        await this.git.checkout(targetBranch);
+        console.log(
+          `GitAnalysisAgent: Cloning repository ${formattedRepoUrl} to ${repoPath}`
+        );
+        try {
+          await this.git.clone(formattedRepoUrl, repoPath);
+          console.log(`GitAnalysisAgent: Repository cloned successfully`);
+        } catch (cloneError) {
+          console.error(`GitAnalysisAgent: Clone error: ${cloneError.message}`);
+          // Try a different approach if clone fails
+          try {
+            console.log(
+              "GitAnalysisAgent: Attempting init and remote add instead"
+            );
+            await this.git.init();
+            await this.git.addRemote("origin", formattedRepoUrl);
+            await this.git.fetch();
+            await this.git.checkout(targetBranch);
+            console.log("GitAnalysisAgent: Init approach succeeded");
+          } catch (initError) {
+            console.error(
+              `GitAnalysisAgent: Init approach failed: ${initError.message}`
+            );
+            throw initError;
+          }
+        }
       } else {
-        // Only fetch updates - don't reset or change branches in development mode
-        if (process.env.NODE_ENV === "development") {
-          // Just fetch without changing the current branch or resetting
-          await this.git.fetch("origin");
-          console.log(
-            `Development mode: Repository fetched without branch change`
-          );
-
-          // Get current branch
-          const status = await this.git.status();
-          console.log(`Currently on branch: ${status.current}`);
-        } else {
-          // In production, we can be more aggressive
+        // Reset any local changes and pull latest
+        console.log(
+          "GitAnalysisAgent: Resetting and updating existing repository"
+        );
+        try {
           await this.git.reset("hard");
           await this.git.checkout(targetBranch);
           await this.git.pull("origin", targetBranch);
-          console.log(`Production mode: Repository updated at ${repoPath}`);
+          console.log(`GitAnalysisAgent: Repository updated at ${repoPath}`);
+        } catch (updateError) {
+          console.error(
+            `GitAnalysisAgent: Update error: ${updateError.message}`
+          );
+          throw updateError;
         }
       }
 
       // Get latest commit hash to track changes
-      const latestCommit = await this.git.revparse(["HEAD"]);
-      this.lastAnalyzedCommit = latestCommit;
-      this.isConnected = true;
+      try {
+        console.log("GitAnalysisAgent: Getting latest commit hash");
+        const latestCommit = await this.git.revparse(["HEAD"]);
+        console.log(`GitAnalysisAgent: Latest commit: ${latestCommit}`);
+        this.lastAnalyzedCommit = latestCommit;
+        this.isConnected = true;
+      } catch (revparseError) {
+        console.error(
+          `GitAnalysisAgent: Revparse error: ${revparseError.message}`
+        );
+        throw revparseError;
+      }
 
+      console.log("GitAnalysisAgent: Repository connection successful");
       return true;
     } catch (error) {
-      console.error("Error connecting to Git repository:", error);
+      console.error(`GitAnalysisAgent: Connection error: ${error.message}`);
       this.error = error.message;
       this.isConnected = false;
       return false;
