@@ -62,33 +62,21 @@ class GitAnalysisAgent extends BaseAgent {
       // Check if git repo already exists at the path
       const isRepo = await this.git.checkIsRepo();
 
-      if (!isRepo) {
-        // Clone repo
-        console.log(
-          `GitAnalysisAgent: Cloning repository ${formattedRepoUrl} to ${repoPath}`
-        );
-        try {
-          await this.git.clone(formattedRepoUrl, repoPath);
-          console.log(`GitAnalysisAgent: Repository cloned successfully`);
-        } catch (cloneError) {
-          console.error(`GitAnalysisAgent: Clone error: ${cloneError.message}`);
-          // Try a different approach if clone fails
-          try {
-            console.log(
-              "GitAnalysisAgent: Attempting init and remote add instead"
-            );
-            await this.git.init();
-            await this.git.addRemote("origin", formattedRepoUrl);
-            await this.git.fetch();
-            await this.git.checkout(targetBranch);
-            console.log("GitAnalysisAgent: Init approach succeeded");
-          } catch (initError) {
-            console.error(
-              `GitAnalysisAgent: Init approach failed: ${initError.message}`
-            );
-            throw initError;
-          }
+      if (isRepo) {
+        // Don't reset or checkout in development mode
+        if (process.env.NODE_ENV !== "development") {
+          await this.git.reset("hard");
+          await this.git.checkout(targetBranch);
+          await this.git.pull("origin", targetBranch);
+        } else {
+          console.log(
+            "Development mode detected - skipping branch checkout and reset"
+          );
+          // Just get the current branch info
+          const status = await this.git.status();
+          console.log(`Currently on branch: ${status.current}`);
         }
+        console.log(`Repository updated at ${repoPath}`);
       } else {
         // Reset any local changes and pull latest
         console.log(
