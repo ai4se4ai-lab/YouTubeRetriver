@@ -38,6 +38,28 @@ class GitAnalysisAgent extends BaseAgent {
   }
 
   /**
+   * Check if a path is safe to use (not inside the project directory)
+   * @param {string} pathToCheck - Path to verify
+   * @returns {boolean} True if the path is safe to use
+   */
+  isSafePath(pathToCheck) {
+    // Resolve to absolute paths for comparison
+    const absolutePath = path.resolve(pathToCheck);
+
+    // Check if the path is inside the project directory
+    const isInsideProject = absolutePath.startsWith(projectRootDir);
+
+    if (isInsideProject) {
+      console.error(
+        `SAFETY CHECK FAILED: Path ${absolutePath} is inside the project directory ${projectRootDir}`
+      );
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
    * Initialize connection to the Git repository
    * @param {Object} options - Optional repository connection options
    * @returns {Promise<boolean>} Connection success status
