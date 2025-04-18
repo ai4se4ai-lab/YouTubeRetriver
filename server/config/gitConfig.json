@@ -1,0 +1,12 @@
+{
+    "defaultSettings": {
+      "repoUrl": "TEST.git",
+      "targetBranch": "main",
+      "username": "TEST",
+      "token": "TEST",
+      "scanInterval": 60000
+    },
+    "reposDirectory": "./temp/git-repos",
+    "cleanupDelay": 5000,
+    "maxConcurrentSessions": 10
+  }

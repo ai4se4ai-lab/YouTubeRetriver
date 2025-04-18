@@ -4,6 +4,7 @@
  */
 const BaseAgent = require("../baseAgent");
 const config = require("../../config/config");
+const gitConfig = require("../../config/gitConfig");
 const { simpleGit } = require("simple-git");
 const path = require("path");
 const fs = require("fs");
@@ -21,81 +22,115 @@ class GitAnalysisAgent extends BaseAgent {
     this.repoPath = null;
     this.lastAnalyzedCommit = null;
     this.isConnected = false;
+    this.currentSessionId = null;
+  }
+
+  /**
+   * Set the current session ID for repository configuration
+   * @param {string} sessionId - The session identifier
+   */
+  setSession(sessionId) {
+    this.currentSessionId = sessionId;
+    this.isConnected = false; // Reset connection status for new session
+    this.lastAnalyzedCommit = null;
+    console.log(`Git Analysis Agent: Session set to ${sessionId}`);
+    return this;
   }
 
   /**
    * Initialize connection to the Git repository
+   * @param {Object} options - Optional repository connection options
    * @returns {Promise<boolean>} Connection success status
    */
-  async connectToRepository() {
+  async connectToRepository(options = {}) {
     try {
-      // Get repository configuration from environment
-      const repoUrl = process.env.GIT_REPO_URL;
-      const repoPath = process.env.GIT_REPO_PATH || "./temp/git-repo";
-      const gitUsername = process.env.GIT_USERNAME;
-      const gitToken = process.env.GIT_TOKEN;
-      const targetBranch = process.env.GIT_TARGET_BRANCH || "main";
+      console.log("GitAnalysisAgent: Connecting to repository...");
 
-      // Validate required config
-      if (!repoUrl) {
-        throw new Error("GIT_REPO_URL environment variable not set");
+      // If options are provided, update the configuration for this session
+      if (Object.keys(options).length > 0 && this.currentSessionId) {
+        gitConfig.setConfig(this.currentSessionId, options);
       }
 
-      this.repoPath = repoPath;
+      // Get repository configuration for current session
+      const repoConfig = gitConfig.getConfig(this.currentSessionId);
+      console.log(`GitAnalysisAgent: Using repo URL ${repoConfig.repoUrl}`);
+
+      // Get unique repository path for this session
+      this.repoPath = gitConfig.getRepoPath(this.currentSessionId);
+      console.log(`GitAnalysisAgent: Using repo path ${this.repoPath}`);
+
+      // Validate required config
+      if (!repoConfig.repoUrl) {
+        throw new Error("Repository URL not provided in configuration");
+      }
 
       // Ensure repo directory exists
-      if (!fs.existsSync(repoPath)) {
-        fs.mkdirSync(repoPath, { recursive: true });
+      if (!fs.existsSync(this.repoPath)) {
+        fs.mkdirSync(this.repoPath, { recursive: true });
+        console.log(`GitAnalysisAgent: Created directory ${this.repoPath}`);
       }
 
       // Format repo URL with credentials if available
-      let formattedRepoUrl = repoUrl;
-      if (gitUsername && gitToken) {
-        const urlObj = new URL(repoUrl);
-        formattedRepoUrl = `${urlObj.protocol}//${gitUsername}:${gitToken}@${urlObj.host}${urlObj.pathname}`;
+      let formattedRepoUrl = repoConfig.repoUrl;
+      if (repoConfig.username && repoConfig.token) {
+        const urlObj = new URL(repoConfig.repoUrl);
+        formattedRepoUrl = `${urlObj.protocol}//${repoConfig.username}:${repoConfig.token}@${urlObj.host}${urlObj.pathname}`;
+        console.log(
+          "GitAnalysisAgent: Using authenticated URL with credentials"
+        );
       }
 
       // Initialize git client
-      this.git = simpleGit(repoPath);
+      this.git = simpleGit(this.repoPath);
+      console.log("GitAnalysisAgent: Git client initialized");
 
       // Check if git repo already exists at the path
       const isRepo = await this.git.checkIsRepo();
+      console.log(`GitAnalysisAgent: Is already a repo: ${isRepo}`);
 
       if (!isRepo) {
         // Clone repo
-        await this.git.clone(formattedRepoUrl, repoPath);
-        console.log(`Repository cloned to ${repoPath}`);
+        console.log(`GitAnalysisAgent: Cloning repository to ${this.repoPath}`);
+        await this.git.clone(formattedRepoUrl, this.repoPath);
+        console.log(`GitAnalysisAgent: Repository cloned to ${this.repoPath}`);
 
-        if (process.env.NODE_ENV !== "development") {
-          // Only in non-development mode, checkout the target branch
-          await this.git.checkout(targetBranch);
-        }
+        // Checkout the target branch
+        await this.git.checkout(repoConfig.targetBranch);
+        console.log(
+          `GitAnalysisAgent: Checked out branch ${repoConfig.targetBranch}`
+        );
       } else {
-        // Development mode: be extremely careful not to disrupt anything
-        if (process.env.NODE_ENV === "development") {
-          // Just fetch without changing the current branch or resetting
-          await this.git.fetch("origin");
-          console.log(
-            `Development mode: Repository fetched without branch change`
-          );
+        // Handle existing repository
+        console.log("GitAnalysisAgent: Repository already exists, updating");
 
-          // Get current branch
-          const status = await this.git.status();
-          console.log(`Currently on branch: ${status.current}`);
-        } else {
-          // Production mode can be more aggressive
-          await this.git.reset("hard");
-          await this.git.checkout(targetBranch);
-          await this.git.pull("origin", targetBranch);
-          console.log(`Production mode: Repository updated at ${repoPath}`);
-        }
+        // First, reset any changes to avoid conflicts
+        await this.git.reset(["--hard"]);
+        console.log("GitAnalysisAgent: Reset any local changes");
+
+        // Then fetch latest changes
+        await this.git.fetch("origin");
+        console.log("GitAnalysisAgent: Fetched latest changes");
+
+        // Checkout the target branch
+        await this.git.checkout(repoConfig.targetBranch);
+        console.log(
+          `GitAnalysisAgent: Checked out branch ${repoConfig.targetBranch}`
+        );
+
+        // Pull the latest changes
+        await this.git.pull("origin", repoConfig.targetBranch);
+        console.log(
+          `GitAnalysisAgent: Pulled latest changes from ${repoConfig.targetBranch}`
+        );
       }
 
-      // Get latest commit hash to track changes (without changing branches)
+      // Get latest commit hash to track changes
       const latestCommit = await this.git.revparse(["HEAD"]);
+      console.log(`GitAnalysisAgent: Latest commit is ${latestCommit}`);
       this.lastAnalyzedCommit = latestCommit;
       this.isConnected = true;
 
+      console.log("GitAnalysisAgent: Successfully connected to repository");
       return true;
     } catch (error) {
       console.error("Error connecting to Git repository:", error);
@@ -104,106 +139,75 @@ class GitAnalysisAgent extends BaseAgent {
       return false;
     }
   }
+
   /**
    * Check for new commits or pull requests on the target branch
    * @returns {Promise<Object>} New commit data if available
    */
   async checkForChanges() {
     if (!this.isConnected) {
+      console.log("GitAnalysisAgent: Not connected, connecting first");
       await this.connectToRepository();
     }
 
     try {
-      const targetBranch = process.env.GIT_TARGET_BRANCH || "main";
+      // Get repository configuration
+      const repoConfig = gitConfig.getConfig(this.currentSessionId);
+      const targetBranch = repoConfig.targetBranch;
+      console.log(
+        `GitAnalysisAgent: Checking for changes on branch ${targetBranch}`
+      );
 
-      // In development mode, don't try to checkout the target branch
-      // Instead, just fetch the latest changes and compare
-      if (process.env.NODE_ENV === "development") {
-        console.log("Development mode: Fetching updates without checkout");
+      // Pull latest changes for the target branch
+      await this.git.checkout(targetBranch);
+      await this.git.pull("origin", targetBranch);
+      console.log("GitAnalysisAgent: Pulled latest changes");
 
-        // Just fetch the latest changes
-        await this.git.fetch("origin");
+      // Get latest commit
+      const latestCommit = await this.git.revparse(["HEAD"]);
+      console.log(`GitAnalysisAgent: Current HEAD is ${latestCommit}`);
 
-        // Get the current branch
-        const status = await this.git.status();
-        console.log(`Currently on branch: ${status.current}`);
+      // If no previous commit or new commits are available
+      if (
+        !this.lastAnalyzedCommit ||
+        latestCommit !== this.lastAnalyzedCommit
+      ) {
+        console.log(
+          `GitAnalysisAgent: New commits found since ${
+            this.lastAnalyzedCommit || "initial check"
+          }`
+        );
 
-        // Get the latest commit on the current branch
-        const latestCommit = await this.git.revparse(["HEAD"]);
+        // Get commit range to analyze
+        const commitRange = this.lastAnalyzedCommit
+          ? `${this.lastAnalyzedCommit}..${latestCommit}`
+          : latestCommit;
 
-        // If no previous commit or new commits are available
-        if (
-          !this.lastAnalyzedCommit ||
-          latestCommit !== this.lastAnalyzedCommit
-        ) {
-          // Get commit range to analyze
-          const commitRange = this.lastAnalyzedCommit
-            ? `${this.lastAnalyzedCommit}..${latestCommit}`
-            : latestCommit;
+        // Get commit details
+        const commitLog = await this.git.log({
+          from: this.lastAnalyzedCommit || "",
+          to: latestCommit,
+        });
+        console.log(
+          `GitAnalysisAgent: Found ${commitLog.all.length} new commits`
+        );
 
-          // Get commit details
-          const commitLog = await this.git.log({
-            from: this.lastAnalyzedCommit || "",
-            to: latestCommit,
-          });
-
-          // Update last analyzed commit
-          this.lastAnalyzedCommit = latestCommit;
-
-          return {
-            hasChanges: true,
-            commits: commitLog.all,
-            commitRange,
-            currentBranch: status.current,
-          };
-        }
-
-        return {
-          hasChanges: false,
-          currentBranch: status.current,
-        };
-      }
-      // In production mode, we can be more aggressive with branch checkout
-      else {
-        // Pull latest changes for the target branch
-        await this.git.checkout(targetBranch);
-        await this.git.pull("origin", targetBranch);
-
-        // Get latest commit
-        const latestCommit = await this.git.revparse(["HEAD"]);
-
-        // If no previous commit or new commits are available
-        if (
-          !this.lastAnalyzedCommit ||
-          latestCommit !== this.lastAnalyzedCommit
-        ) {
-          // Get commit range to analyze
-          const commitRange = this.lastAnalyzedCommit
-            ? `${this.lastAnalyzedCommit}..${latestCommit}`
-            : latestCommit;
-
-          // Get commit details
-          const commitLog = await this.git.log({
-            from: this.lastAnalyzedCommit || "",
-            to: latestCommit,
-          });
-
-          // Update last analyzed commit
-          this.lastAnalyzedCommit = latestCommit;
-
-          return {
-            hasChanges: true,
-            commits: commitLog.all,
-            commitRange,
-            currentBranch: targetBranch,
-          };
-        }
+        // Update last analyzed commit
+        this.lastAnalyzedCommit = latestCommit;
 
         return {
-          hasChanges: false,
+          hasChanges: true,
+          commits: commitLog.all,
+          commitRange,
           currentBranch: targetBranch,
         };
       }
+
+      console.log("GitAnalysisAgent: No new changes detected");
+      return {
+        hasChanges: false,
+        currentBranch: targetBranch,
+      };
     } catch (error) {
       console.error("Error checking for changes:", error);
       this.error = error.message;
@@ -228,11 +232,16 @@ class GitAnalysisAgent extends BaseAgent {
    */
   async getCommitDiff(commitRange) {
     try {
+      console.log(`GitAnalysisAgent: Getting diff for range ${commitRange}`);
+
       // Get the diff
       const diff = await this.git.diff([commitRange]);
 
       // Get the list of changed files
       const summary = await this.git.diffSummary([commitRange]);
+      console.log(
+        `GitAnalysisAgent: Found ${summary.files.length} changed files`
+      );
 
       return {
         diff,
@@ -255,11 +264,17 @@ class GitAnalysisAgent extends BaseAgent {
    */
   async runSecurityScan(changedFiles) {
     try {
+      console.log(
+        `GitAnalysisAgent: Running security scan on ${changedFiles.length} files`
+      );
       let securityIssues = [];
 
       // Check if external scanning tools are available
       const hasBandit = await this.checkToolAvailability("bandit --version");
       const hasESLint = await this.checkToolAvailability("eslint --version");
+      console.log(
+        `GitAnalysisAgent: Available tools - ESLint: ${hasESLint}, Bandit: ${hasBandit}`
+      );
 
       // Filter files by language/type for specific scanners
       const jsFiles = changedFiles.filter(
@@ -270,9 +285,15 @@ class GitAnalysisAgent extends BaseAgent {
       );
 
       const pyFiles = changedFiles.filter((file) => file.file.endsWith(".py"));
+      console.log(
+        `GitAnalysisAgent: Found ${jsFiles.length} JS files and ${pyFiles.length} Python files`
+      );
 
       // Run ESLint for JavaScript files
       if (hasESLint && jsFiles.length > 0) {
+        console.log(
+          `GitAnalysisAgent: Running ESLint on ${jsFiles.length} JavaScript files`
+        );
         for (const file of jsFiles) {
           const filePath = path.join(this.repoPath, file.file);
           if (fs.existsSync(filePath)) {
@@ -340,6 +361,9 @@ class GitAnalysisAgent extends BaseAgent {
 
       // Run Bandit for Python files
       if (hasBandit && pyFiles.length > 0) {
+        console.log(
+          `GitAnalysisAgent: Running Bandit on ${pyFiles.length} Python files`
+        );
         for (const file of pyFiles) {
           const filePath = path.join(this.repoPath, file.file);
           if (fs.existsSync(filePath)) {
@@ -368,6 +392,7 @@ class GitAnalysisAgent extends BaseAgent {
       }
 
       // Simple pattern-based security checks for all files
+      console.log("GitAnalysisAgent: Running pattern-based scan on all files");
       for (const file of changedFiles) {
         const filePath = path.join(this.repoPath, file.file);
         if (fs.existsSync(filePath)) {
@@ -381,6 +406,9 @@ class GitAnalysisAgent extends BaseAgent {
         }
       }
 
+      console.log(
+        `GitAnalysisAgent: Found ${securityIssues.length} security issues`
+      );
       return {
         issuesFound: securityIssues.length > 0,
         securityIssues,
@@ -523,6 +551,7 @@ class GitAnalysisAgent extends BaseAgent {
    */
   async extractContext(securityResults, diffData) {
     try {
+      console.log("GitAnalysisAgent: Extracting context around issues");
       const issuesWithContext = [];
 
       for (const issue of securityResults.securityIssues) {
@@ -593,96 +622,121 @@ class GitAnalysisAgent extends BaseAgent {
 
   /**
    * Analyze repository changes and identify issues
+   * @param {string} sessionId - Session identifier
+   * @param {Object} options - Repository options
    * @returns {Promise<Object>} Analysis results
    */
-  async analyzeChanges() {
+  async analyzeChanges(sessionId, options = {}) {
     try {
-      try {
-        console.log("GitAnalysisAgent: Starting analysis...");
+      console.log("GitAnalysisAgent: Starting analysis...");
 
-        // Connect to repository if not connected
-        if (!this.isConnected) {
-          console.log("GitAnalysisAgent: Connecting to repository...");
-          const connected = await this.connectToRepository();
-          console.log(
-            "GitAnalysisAgent: Repository connection result:",
-            connected
-          );
-          if (!connected) {
-            throw new Error("Failed to connect to repository");
-          }
-        }
-
-        // Check for new changes
-        console.log("GitAnalysisAgent: Checking for changes...");
-        const changeData = await this.checkForChanges();
-        console.log("GitAnalysisAgent: Change data:", changeData);
-
-        // No changes or error
-        if (!changeData.hasChanges) {
-          console.log("GitAnalysisAgent: No changes detected");
-          return this.process({
-            status: "no_changes",
-            message: "No new commits to analyze",
-          });
-        }
-
-        // Get diff data
-        const diffData = await this.getCommitDiff(changeData.commitRange);
-
-        if (diffData.error) {
-          throw new Error(`Error getting diff: ${diffData.error}`);
-        }
-
-        // Run security scan on changed files
-        const securityResults = await this.runSecurityScan(
-          diffData.changedFiles
-        );
-
-        // Extract context around issues
-        const contextData = await this.extractContext(
-          securityResults,
-          diffData
-        );
-
-        // Process the results
-        const analysisResults = {
-          repositoryUrl: process.env.GIT_REPO_URL,
-          targetBranch: process.env.GIT_TARGET_BRANCH || "main",
-          commitData: changeData.commits,
-          diffSummary: {
-            insertions: diffData.insertions,
-            deletions: diffData.deletions,
-            changedFilesCount: diffData.changedFilesCount,
-            changedFiles: diffData.changedFiles.map((f) => f.file),
-          },
-          securityIssues: contextData.issuesWithContext,
-          securitySummary: {
-            totalIssues: contextData.totalIssues,
-            issuesBySeverity: contextData.issuesBySeverity,
-          },
-          analysisTimestamp: new Date().toISOString(),
-        };
-
-        // Process through LLM for analysis
-        return this.process(analysisResults, this.prompt);
-      } catch (error) {
-        console.error("Error analyzing changes:", error);
-        this.error = error.message;
-
-        // Return an error result
-        return {
-          name: this.name,
-          processed: false,
-          error: error.message,
-          result: null,
-        };
+      // Set the current session if provided
+      if (sessionId) {
+        this.setSession(sessionId);
       }
-      // Rest of the function...
+
+      // If options are provided, update configuration
+      if (Object.keys(options).length > 0) {
+        console.log("GitAnalysisAgent: Using provided repository options");
+        gitConfig.setConfig(this.currentSessionId, options);
+      }
+
+      // Connect to repository
+      if (!this.isConnected) {
+        console.log("GitAnalysisAgent: Connecting to repository...");
+        const connected = await this.connectToRepository();
+        console.log(
+          "GitAnalysisAgent: Repository connection result:",
+          connected
+        );
+        if (!connected) {
+          throw new Error("Failed to connect to repository");
+        }
+      }
+
+      // Check for new changes
+      console.log("GitAnalysisAgent: Checking for changes...");
+      const changeData = await this.checkForChanges();
+      console.log("GitAnalysisAgent: Change data:", changeData);
+
+      // No changes or error
+      if (!changeData.hasChanges) {
+        console.log("GitAnalysisAgent: No changes detected");
+        return this.process({
+          status: "no_changes",
+          message: "No new commits to analyze",
+          repoInfo: {
+            url: gitConfig.getConfig(this.currentSessionId).repoUrl,
+            branch: gitConfig.getConfig(this.currentSessionId).targetBranch,
+          },
+        });
+      }
+
+      // Get diff data
+      const diffData = await this.getCommitDiff(changeData.commitRange);
+
+      if (diffData.error) {
+        throw new Error(`Error getting diff: ${diffData.error}`);
+      }
+
+      // Run security scan on changed files
+      const securityResults = await this.runSecurityScan(diffData.changedFiles);
+
+      // Extract context around issues
+      const contextData = await this.extractContext(securityResults, diffData);
+
+      // Get repository configuration for current session
+      const repoConfig = gitConfig.getConfig(this.currentSessionId);
+
+      // Process the results
+      const analysisResults = {
+        repositoryUrl: repoConfig.repoUrl,
+        targetBranch: repoConfig.targetBranch,
+        commitData: changeData.commits,
+        diffSummary: {
+          insertions: diffData.insertions,
+          deletions: diffData.deletions,
+          changedFilesCount: diffData.changedFilesCount,
+          changedFiles: diffData.changedFiles.map((f) => f.file),
+        },
+        securityIssues: contextData.issuesWithContext,
+        securitySummary: {
+          totalIssues: contextData.totalIssues,
+          issuesBySeverity: contextData.issuesBySeverity,
+        },
+        analysisTimestamp: new Date().toISOString(),
+      };
+
+      // Process through LLM for analysis
+      return this.process(analysisResults, this.prompt);
     } catch (error) {
       console.error("GitAnalysisAgent: Error analyzing changes:", error);
-      // Rest of the error handling...
+      this.error = error.message;
+
+      // Return an error result
+      return {
+        name: this.name,
+        processed: false,
+        error: error.message,
+        result: null,
+      };
     }
+  }
+
+  /**
+   * Clean up resources when done
+   */
+  cleanup() {
+    console.log("GitAnalysisAgent: Cleaning up resources");
+
+    // Clear the session configuration
+    if (this.currentSessionId) {
+      gitConfig.clearConfig(this.currentSessionId);
+    }
+
+    this.isConnected = false;
+    this.lastAnalyzedCommit = null;
+    this.currentSessionId = null;
   }
 }
 
