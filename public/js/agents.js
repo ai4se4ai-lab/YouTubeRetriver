@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
     socket: null,
     sessionId: null,
     agents: {
+      gitAnalysis: { status: "idle", result: null },
       contentAnalysis: { status: "idle", result: null },
       knowledgeRetrieval: { status: "idle", result: null },
       analogyGeneration: { status: "idle", result: null },
@@ -83,6 +84,53 @@ document.addEventListener("DOMContentLoaded", () => {
         updateUI();
       });
 
+      agentSystem.socket.on("gitChangesDetected", (data) => {
+        console.log("Git changes detected:", data);
+
+        // Add a message to the orchestrator's message area
+        addOrchestratorMessage(
+          `Git changes detected at ${new Date(
+            data.timestamp
+          ).toLocaleTimeString()}. ${
+            data.changeData.commitCount !== "unknown"
+              ? `${data.changeData.commitCount} new commits found.`
+              : "New commits detected."
+          }`,
+          true // Mark as alert to draw attention
+        );
+
+        // Optionally, if Git Analysis card exists, update it
+        const gitCard = document.getElementById("gitAnalysis-card");
+        if (gitCard) {
+          // Add a visual indicator that new changes are available
+          gitCard.classList.add("git-changes-available");
+
+          // If the Git Analysis agent is idle, you could add a button to analyze now
+          if (agentSystem.agents.gitAnalysis.status === "idle") {
+            const actionButtons = gitCard.querySelector(
+              ".agent-action-buttons"
+            );
+            if (actionButtons) {
+              // Remove any existing analyze button
+              const existingButton = actionButtons.querySelector(
+                ".analyze-git-button"
+              );
+              if (existingButton) {
+                existingButton.remove();
+              }
+
+              // Add new analyze button
+              const analyzeButton = document.createElement("button");
+              analyzeButton.className =
+                "btn analyze-git-button pulse-attention";
+              analyzeButton.textContent = "Analyze New Changes";
+              analyzeButton.onclick = triggerGitAnalysis;
+              actionButtons.appendChild(analyzeButton);
+            }
+          }
+        }
+      });
+
       // Subscribe to session events
       agentSystem.socket.on("stateUpdate", handleStateUpdate);
       agentSystem.socket.on("processingStep", handleProcessingStep);
@@ -94,6 +142,32 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("Socket.io not loaded! Please check network connection");
       setTimeout(initSocket, 1000); // Try again in 1 second
     }
+  }
+
+  // Function to trigger Git analysis
+  function triggerGitAnalysis() {
+    if (!agentSystem.sessionId) {
+      console.error("No active session for Git analysis");
+      return;
+    }
+
+    fetch("/api/agents/trigger-git-analysis", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${auth.getAccessToken()}`,
+      },
+      body: JSON.stringify({ sessionId: agentSystem.sessionId }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("Git analysis triggered:", data);
+        addOrchestratorMessage("Manual Git analysis triggered");
+      })
+      .catch((error) => {
+        console.error("Error triggering Git analysis:", error);
+        alert(`Failed to trigger Git analysis: ${error.message}`);
+      });
   }
 
   // Event handlers for socket events
@@ -224,7 +298,26 @@ document.addEventListener("DOMContentLoaded", () => {
         likedVideos: document.getElementById("liked-videos").checked,
         watchHistory: document.getElementById("watch-history").checked,
         maxResults: parseInt(document.getElementById("max-results").value, 10),
+        enableGitAnalysis:
+          document.getElementById("git-analysis").checked || false,
+        gitRepoUrl: document.getElementById("git-repo-url")?.value || "",
+        gitBranch: document.getElementById("git-branch")?.value || "main",
       };
+
+      gitConnectionSuccessful = true; // Assume true for now
+      //Validate Git analysis if enabled
+      if (options.enableGitAnalysis) {
+        if (!gitConnectionSuccessful) {
+          const confirmContinue = confirm(
+            "Git connection has not been tested successfully. Test connection now?"
+          );
+          if (confirmContinue) {
+            // Trigger the test connection button
+            testGitConnectionBtn.click();
+            return; // Don't continue until connection is tested
+          }
+        }
+      }
 
       // Validate options
       if (!options.likedVideos && !options.watchHistory) {
@@ -248,13 +341,14 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("results-section").classList.remove("hidden");
 
       // Start processing
+      // Make sure options are passed to the server
       const response = await fetch("/api/agents/process", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${auth.getAccessToken()}`,
         },
-        body: JSON.stringify({ options }),
+        body: JSON.stringify({ options }), // Make sure options are included here
       });
 
       if (!response.ok) {
@@ -1238,6 +1332,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Define connections between agents
     const connections = [
+      // Add Git Analysis Agent connections
+      { from: "gitAnalysis", to: "contentAnalysis" },
+      { from: "gitAnalysis", to: "analogyGeneration" },
+
+      // Existing connections
       { from: "contentAnalysis", to: "knowledgeRetrieval" },
       { from: "knowledgeRetrieval", to: "analogyGeneration" },
       { from: "analogyGeneration", to: "analogyValidation" },
@@ -1245,7 +1344,9 @@ document.addEventListener("DOMContentLoaded", () => {
       { from: "analogyRefinement", to: "explanation" },
       { from: "explanation", to: "userFeedback" },
       { from: "userFeedback", to: "learning" },
-      // Add connections from orchestrator to all agents
+
+      // Orchestrator connections - add connection to gitAnalysis
+      { from: "orchestrator", to: "gitAnalysis" },
       { from: "orchestrator", to: "contentAnalysis" },
       { from: "orchestrator", to: "knowledgeRetrieval" },
       { from: "orchestrator", to: "analogyGeneration" },
@@ -1401,6 +1502,20 @@ document.addEventListener("DOMContentLoaded", () => {
         toggleResultDisplay(this);
       });
     });
+
+    // Git repository options toggle
+    const gitAnalysisCheckbox = document.getElementById("git-analysis");
+    const gitRepoDetails = document.querySelector(".git-repo-details");
+
+    if (gitAnalysisCheckbox && gitRepoDetails) {
+      gitAnalysisCheckbox.addEventListener("change", function () {
+        if (this.checked) {
+          gitRepoDetails.classList.remove("hidden");
+        } else {
+          gitRepoDetails.classList.add("hidden");
+        }
+      });
+    }
 
     // Close modal when clicking outside
     const modals = document.querySelectorAll(

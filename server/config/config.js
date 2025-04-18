@@ -42,10 +42,21 @@ const config = {
     maxFileAge: 60 * 60 * 1000, // 1 hour in milliseconds
   },
 
+  // Agent approval settings
+  agentApprovals: {
+    required: process.env.REQUIRED_AGENT_APPROVALS
+      ? process.env.REQUIRED_AGENT_APPROVALS === "all"
+        ? "all"
+        : process.env.REQUIRED_AGENT_APPROVALS.split(",")
+      : "none",
+  },
+
   // LLM Agent settings
   agents: {
     openaiApiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4-turbo",
+    model: "gpt-4o-mini",
+    gitAnalysisPrompt:
+      "Analyze the Git repository changes to identify potential security vulnerabilities, code quality issues, or other concerns. Focus on extracting significant patterns and providing actionable insights about the code changes.",
     contentAnalysisPrompt:
       "Analyze the YouTube data to identify main themes, topics, and potential user interests. Focus on extracting meaningful patterns and insights.",
     knowledgeRetrievalPrompt:

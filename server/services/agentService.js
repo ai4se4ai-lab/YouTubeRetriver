@@ -39,6 +39,15 @@ module.exports = {
   },
 
   /**
+   * Get a specific agent
+   * @param {string} agentKey - The key of the agent to get
+   * @returns {Object|null} - The agent or null if not found
+   */
+  getAgent(agentKey) {
+    return agentManager.getAgent(agentKey);
+  },
+
+  /**
    * Process YouTube data with AI agents
    * @param {string} accessToken - YouTube API access token
    * @param {Object} options - Processing options
@@ -64,10 +73,11 @@ module.exports = {
         );
       }
 
-      // Process data through agents
+      // Process data through agents - PASS THE OPTIONS PARAMETER HERE
       const results = await agentManager.runFullWorkflow(
         youtubeData,
-        approvalCallback
+        approvalCallback,
+        options // Make sure to pass options here
       );
       return results;
     } catch (error) {

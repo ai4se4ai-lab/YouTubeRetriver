@@ -39,6 +39,27 @@ const io = socketIo(server, {
   },
 });
 
+const agentManager = require("./agents/AgentManager");
+// Listen for Git changes
+agentManager.on("gitChangesDetected", async (changeInfo) => {
+  console.log("Git changes detected by monitoring:", changeInfo.timestamp);
+
+  // Notify all connected clients about the change
+  io.emit("gitChangesDetected", {
+    timestamp: changeInfo.timestamp,
+    message: "New Git changes detected in the repository",
+    changeData: {
+      hasChanges: true,
+      commitCount: changeInfo.changeData.commits?.length || "unknown",
+    },
+  });
+
+  // If automatic and we have active sessions, we could trigger analysis
+  if (changeInfo.automatic) {
+    console.log("Automatic Git change detection, notifying clients");
+  }
+});
+
 // Make io accessible to the Express app
 app.set("io", io);
 

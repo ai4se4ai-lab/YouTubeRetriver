@@ -5,6 +5,9 @@
 document.addEventListener("DOMContentLoaded", () => {
   console.log("DOM loaded, initializing app");
 
+  // Flag to track Git connection status
+  let gitConnectionSuccessful = false;
+
   // DOM Elements
   const authButton = document.getElementById("auth-button");
   const exportButton = document.getElementById("export-button");
@@ -21,6 +24,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const downloadContainer = document.getElementById("download-container");
   const exportStatus = document.getElementById("export-status");
   const progressBar = document.getElementById("progress-bar");
+
+  // Git repository elements
+  const gitAnalysisCheckbox = document.getElementById("git-analysis");
+  const gitRepoDetails = document.querySelector(".git-repo-details");
+  const testGitConnectionBtn = document.getElementById("test-git-connection");
+  const gitConnectionStatus = document.getElementById("git-connection-status");
+  const configRepoUrl = document.getElementById("config-repo-url");
+  const configBranch = document.getElementById("config-branch");
 
   // Track export completion state
   let exportCompleted = false;
@@ -49,6 +60,70 @@ document.addEventListener("DOMContentLoaded", () => {
     .catch((error) => {
       console.error("Error checking auth status:", error);
     });
+
+  // Show/hide git repo details when checkbox is toggled
+  if (gitAnalysisCheckbox && gitRepoDetails) {
+    gitAnalysisCheckbox.addEventListener("change", function () {
+      if (this.checked) {
+        gitRepoDetails.classList.remove("hidden");
+        if (
+          auth.isAuthenticated() &&
+          configRepoUrl.textContent === "Loading..."
+        ) {
+          loadGitConfigFromServer();
+        }
+      } else {
+        gitRepoDetails.classList.add("hidden");
+        // Reset connection status when disabled
+        gitConnectionSuccessful = false;
+        if (gitConnectionStatus) {
+          gitConnectionStatus.textContent = "Not connected";
+          gitConnectionStatus.className = "";
+        }
+      }
+    });
+  }
+
+  // Test Git connection
+  if (testGitConnectionBtn && gitConnectionStatus) {
+    testGitConnectionBtn.addEventListener("click", async function () {
+      // Update UI to show testing
+      gitConnectionStatus.textContent = "Testing connection...";
+      gitConnectionStatus.className = "testing";
+
+      try {
+        console.log("Testing Git connection with server configuration");
+
+        const response = await fetch("/api/agents/test-git-connection", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${auth.getAccessToken()}`,
+          },
+          body: JSON.stringify({}), // Empty object since config comes from server
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          gitConnectionStatus.textContent = "Connected ✓";
+          gitConnectionStatus.className = "connected";
+          gitConnectionSuccessful = true;
+        } else {
+          gitConnectionStatus.textContent = "Connection failed";
+          gitConnectionStatus.className = "error";
+          gitConnectionSuccessful = false;
+          alert(`Failed to connect: ${data.error || "Unknown error"}`);
+        }
+      } catch (error) {
+        console.error("Error testing Git connection:", error);
+        gitConnectionStatus.textContent = "Connection error";
+        gitConnectionStatus.className = "error";
+        gitConnectionSuccessful = false;
+        alert(`Connection error: ${error.message}`);
+      }
+    });
+  }
 
   // Authentication button click event
   if (authButton) {
@@ -158,18 +233,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Start agent processing
-      if (
-        window.showThinkingProcess &&
-        typeof window.startAgentProcessing === "function"
-      ) {
-        window.startAgentProcessing();
-      } else {
-        console.error("Agent functions not found - ensure agents.js is loaded");
-        showError(
-          "Failed to start AI analysis. Please refresh the page and try again."
-        );
-      }
+      startAgentProcessing();
     });
   }
 
@@ -192,6 +256,84 @@ document.addEventListener("DOMContentLoaded", () => {
       privacyModal.style.display = "none";
     }
   });
+
+  // Load Git configuration from server
+  async function loadGitConfigFromServer() {
+    try {
+      const response = await fetch("/api/agents/git-config", {
+        headers: {
+          Authorization: `Bearer ${auth.getAccessToken()}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (configRepoUrl) {
+          configRepoUrl.textContent = data.repoUrl || "Not configured";
+        }
+        if (configBranch) {
+          configBranch.textContent = data.targetBranch || "main";
+        }
+      } else {
+        if (configRepoUrl) configRepoUrl.textContent = "Error loading";
+        if (configBranch) configBranch.textContent = "Error loading";
+      }
+    } catch (error) {
+      console.error("Error loading Git config:", error);
+      if (configRepoUrl) configRepoUrl.textContent = "Error loading";
+      if (configBranch) configBranch.textContent = "Error loading";
+    }
+  }
+
+  // Start agent processing function
+  async function startAgentProcessing() {
+    try {
+      // Check if user is authenticated
+      if (!auth.isAuthenticated()) {
+        showError("Please connect to YouTube first");
+        return;
+      }
+
+      // Get export options
+      const options = {
+        likedVideos: document.getElementById("liked-videos").checked,
+        watchHistory: document.getElementById("watch-history").checked,
+        maxResults: parseInt(document.getElementById("max-results").value, 10),
+        enableGitAnalysis:
+          document.getElementById("git-analysis")?.checked || false,
+      };
+
+      // Validate Git options if enabled
+      if (options.enableGitAnalysis) {
+        if (!gitConnectionSuccessful) {
+          const confirmContinue = confirm(
+            "Git connection has not been tested successfully. Test connection now?"
+          );
+          if (confirmContinue) {
+            // Trigger the test connection button
+            testGitConnectionBtn.click();
+            return; // Don't continue until connection is tested
+          }
+        }
+      }
+
+      // Start processing
+      if (
+        window.showThinkingProcess &&
+        typeof window.startAgentProcessing === "function"
+      ) {
+        window.startAgentProcessing();
+      } else {
+        console.error("Agent functions not found - ensure agents.js is loaded");
+        showError(
+          "Failed to start AI analysis. Please refresh the page and try again."
+        );
+      }
+    } catch (error) {
+      console.error("Error starting agent processing:", error);
+      showError(`Failed to start agent processing: ${error.message}`);
+    }
+  }
 
   // Helper function to update analysis button state
   function updateAnalysisButtonState(enabled) {

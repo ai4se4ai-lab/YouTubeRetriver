@@ -200,6 +200,93 @@ input[type="number"] {
     display: none;
 }
 
+/* Git connection status indicators */
+#git-connection-status {
+    margin-left: 10px;
+    padding: 4px 8px;
+    border-radius: var(--border-radius);
+    display: inline-block;
+}
+
+#git-connection-status.testing {
+    background-color: var(--warning-color);
+    color: #fff;
+}
+
+#git-connection-status.connected {
+    background-color: #28a745;
+    color: #fff;
+}
+
+#git-connection-status.error {
+    background-color: var(--error-color);
+    color: #fff;
+}
+
+/* Git Repository Server Configuration Styling */
+.git-repo-details {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: var(--light-gray);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gray);
+}
+
+.info-text {
+    color: var(--dark-gray);
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
+
+.server-config-info {
+    margin: 15px 0;
+    padding: 10px;
+    background-color: var(--white);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gray);
+}
+
+.config-item {
+    margin-bottom: 8px;
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.config-label {
+    font-weight: bold;
+    width: 100px;
+    color: var(--secondary-color);
+}
+
+.config-value {
+    flex: 1;
+    word-break: break-all;
+}
+
+/* Status indicators for Git connection */
+#git-connection-status {
+    margin-left: 10px;
+    padding: 4px 8px;
+    border-radius: var(--border-radius);
+    display: inline-block;
+    font-size: 0.9rem;
+}
+
+#git-connection-status.testing {
+    background-color: #FBBC05;
+    color: #fff;
+}
+
+#git-connection-status.connected {
+    background-color: #34A853;
+    color: #fff;
+}
+
+#git-connection-status.error {
+    background-color: #EA4335;
+    color: #fff;
+}
+
 /* Responsive Adjustments */
 @media (max-width: 768px) {
     .container {

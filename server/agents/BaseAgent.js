@@ -148,6 +148,8 @@ IMPORTANT: Your response will be shown to the user and also passed to other agen
     this.startTime = null;
     this.endTime = null;
     this.duration = null;
+    // Stop any active Git polling
+    // this.stopGitRepositoryPolling();
   }
 
   /**
