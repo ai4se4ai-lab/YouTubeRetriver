@@ -59,6 +59,13 @@ class GitAnalysisAgent extends BaseAgent {
       this.repoPath = gitConfig.getRepoPath(this.currentSessionId);
       console.log(`GitAnalysisAgent: Using repo path ${this.repoPath}`);
 
+      // SAFETY CHECK: Ensure the repository path is not inside the project directory
+      if (!this.isSafePath(this.repoPath)) {
+        throw new Error(
+          `Safety check failed: Cannot use repository path ${this.repoPath} as it appears to be inside the project directory. Please configure a separate path in gitConfig.json.`
+        );
+      }
+
       // Validate required config
       if (!repoConfig.repoUrl) {
         throw new Error("Repository URL not provided in configuration");

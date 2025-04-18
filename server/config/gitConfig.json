@@ -1,12 +1,12 @@
 {
-    "defaultSettings": {
-      "repoUrl": "TEST.git",
-      "targetBranch": "main",
-      "username": "TEST",
-      "token": "TEST",
-      "scanInterval": 60000
-    },
-    "reposDirectory": "./temp/git-repos",
-    "cleanupDelay": 5000,
-    "maxConcurrentSessions": 10
-  }
+  "defaultSettings": {
+    "repoUrl": "https://github.com/TEST/LiveYourLife.git",
+    "targetBranch": "main",
+    "username": "",
+    "token": "",
+    "scanInterval": 60000
+  },
+  "reposDirectory": "C:/temp/git-analysis-repos",
+  "cleanupDelay": 5000,
+  "maxConcurrentSessions": 10
+}
