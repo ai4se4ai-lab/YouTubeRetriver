@@ -47,12 +47,17 @@ class AgentManager extends EventEmitter {
    */
   startDefaultGitMonitoring() {
     if (process.env.GIT_REPO_URL) {
-      console.log("Starting default Git repository monitoring");
+      console.log(
+        "Starting default Git repository monitoring " + process.env.GIT_REPO_URL
+      );
 
       // Start polling at a shorter interval (30 seconds)
       this.gitPollingInterval = setInterval(async () => {
         try {
-          console.log("Default polling: Checking Git repository for changes");
+          console.log(
+            "Default polling: Checking Git repository for changes " +
+              process.env.GIT_REPO_URL
+          );
 
           const gitAgent = this.agents.gitAnalysis;
 

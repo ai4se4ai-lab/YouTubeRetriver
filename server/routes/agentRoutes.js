@@ -4,7 +4,8 @@
 const express = require("express");
 const router = express.Router();
 const agentController = require("../controllers/agentController");
-const agentService = require("../services/agentService"); // Add this line
+const agentService = require("../services/agentService");
+const gitConfig = require("../config/gitConfig");
 const helpers = require("../utils/helpers");
 
 // Start agent processing
@@ -45,6 +46,27 @@ router.get(
   agentController.getPendingStepDetails
 );
 
+// Get Git configuration
+router.get("/git-config", helpers.authenticateToken, async (req, res) => {
+  try {
+    // Get the default Git configuration
+    const defaultConfig = gitConfig.getConfig();
+
+    // Return just the necessary parts (not credentials)
+    res.json({
+      repoUrl: defaultConfig.repoUrl,
+      targetBranch: defaultConfig.targetBranch,
+      scanInterval: defaultConfig.scanInterval,
+    });
+  } catch (error) {
+    console.error("Error fetching Git configuration:", error);
+    res.status(500).json({
+      error: "Failed to fetch Git configuration",
+      message: error.message,
+    });
+  }
+});
+
 // Test Git connection
 router.post(
   "/test-git-connection",
@@ -56,29 +78,15 @@ router.post(
         return res.status(404).json({ error: "Git Analysis Agent not found" });
       }
 
-      // Use the options from the request if provided
-      const { repoUrl, branch, username, token } = req.body;
+      // Create a temporary session ID for testing
+      const tempSessionId = `test_${Date.now()}`;
 
-      // Store original values to restore later
-      const originalRepoUrl = process.env.GIT_REPO_URL;
-      const originalBranch = process.env.GIT_TARGET_BRANCH;
-      const originalUsername = process.env.GIT_USERNAME;
-      const originalToken = process.env.GIT_TOKEN;
-
-      // Temporarily set environment variables if provided
-      if (repoUrl) process.env.GIT_REPO_URL = repoUrl;
-      if (branch) process.env.GIT_TARGET_BRANCH = branch;
-      if (username) process.env.GIT_USERNAME = username;
-      if (token) process.env.GIT_TOKEN = token;
-
-      // Test the connection
+      // Set the session for the Git agent using default configuration
+      gitAgent.setSession(tempSessionId);
       const connected = await gitAgent.connectToRepository();
 
-      // Restore original environment variables
-      process.env.GIT_REPO_URL = originalRepoUrl;
-      process.env.GIT_TARGET_BRANCH = originalBranch;
-      process.env.GIT_USERNAME = originalUsername;
-      process.env.GIT_TOKEN = originalToken;
+      // Clean up after testing
+      gitAgent.cleanup();
 
       res.json({
         success: connected,
@@ -107,7 +115,7 @@ router.post(
 
       // Get the Git agent via the manager
       const agentManager = agentService.initAgents();
-      const result = await agentManager.triggerGitAnalysis();
+      const result = await agentManager.triggerGitAnalysis(sessionId);
 
       // Emit the result via socket
       const io = req.app.get("io");

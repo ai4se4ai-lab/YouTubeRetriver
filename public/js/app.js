@@ -30,6 +30,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const gitRepoDetails = document.querySelector(".git-repo-details");
   const testGitConnectionBtn = document.getElementById("test-git-connection");
   const gitConnectionStatus = document.getElementById("git-connection-status");
+  const configRepoUrl = document.getElementById("config-repo-url");
+  const configBranch = document.getElementById("config-branch");
 
   // Track export completion state
   let exportCompleted = false;
@@ -64,6 +66,12 @@ document.addEventListener("DOMContentLoaded", () => {
     gitAnalysisCheckbox.addEventListener("change", function () {
       if (this.checked) {
         gitRepoDetails.classList.remove("hidden");
+        if (
+          auth.isAuthenticated() &&
+          configRepoUrl.textContent === "Loading..."
+        ) {
+          loadGitConfigFromServer();
+        }
       } else {
         gitRepoDetails.classList.add("hidden");
         // Reset connection status when disabled
@@ -79,37 +87,20 @@ document.addEventListener("DOMContentLoaded", () => {
   // Test Git connection
   if (testGitConnectionBtn && gitConnectionStatus) {
     testGitConnectionBtn.addEventListener("click", async function () {
-      // Check if URL is provided
-      const gitRepoUrl = document.getElementById("git-repo-url").value;
-      const gitBranch = document.getElementById("git-branch").value || "main";
-
-      if (!gitRepoUrl) {
-        alert("Please enter a Git repository URL");
-        return;
-      }
-
       // Update UI to show testing
       gitConnectionStatus.textContent = "Testing connection...";
       gitConnectionStatus.className = "testing";
 
       try {
-        console.log("Testing Git connection with:", { gitRepoUrl, gitBranch });
+        console.log("Testing Git connection with server configuration");
 
-        // For now, simulate a successful connection since we're having issues with the endpoint
-        setTimeout(() => {
-          gitConnectionStatus.textContent = "Connected ✓";
-          gitConnectionStatus.className = "connected";
-          gitConnectionSuccessful = true;
-        }, 1000);
-
-        // Uncomment this when the endpoint is fixed
         const response = await fetch("/api/agents/test-git-connection", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${auth.getAccessToken()}`,
           },
-          body: JSON.stringify({ gitRepoUrl, gitBranch }),
+          body: JSON.stringify({}), // Empty object since config comes from server
         });
 
         const data = await response.json();
@@ -282,17 +273,10 @@ document.addEventListener("DOMContentLoaded", () => {
         maxResults: parseInt(document.getElementById("max-results").value, 10),
         enableGitAnalysis:
           document.getElementById("git-analysis")?.checked || false,
-        gitRepoUrl: document.getElementById("git-repo-url")?.value || "",
-        gitBranch: document.getElementById("git-branch")?.value || "main",
       };
 
       // Validate Git options if enabled
       if (options.enableGitAnalysis) {
-        if (!options.gitRepoUrl) {
-          showError("Please enter a Git repository URL for analysis.");
-          return;
-        }
-
         if (!gitConnectionSuccessful) {
           const confirmContinue = confirm(
             "Git connection has not been tested successfully. Test connection now?"

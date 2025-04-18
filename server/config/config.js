@@ -11,14 +11,6 @@ const config = {
     nodeEnv: process.env.NODE_ENV || "development",
   },
 
-  git: {
-    repoUrl: process.env.GIT_REPO_URL,
-    repoPath: process.env.GIT_REPO_PATH || "./temp/git-repo",
-    targetBranch: process.env.GIT_TARGET_BRANCH || "main",
-    username: process.env.GIT_USERNAME,
-    token: process.env.GIT_TOKEN,
-  },
-
   // Google OAuth settings
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,
@@ -62,7 +54,7 @@ const config = {
   // LLM Agent settings
   agents: {
     openaiApiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4-turbo",
+    model: "gpt-4o-mini",
     gitAnalysisPrompt:
       "Analyze the Git repository changes to identify potential security vulnerabilities, code quality issues, or other concerns. Focus on extracting significant patterns and providing actionable insights about the code changes.",
     contentAnalysisPrompt:
