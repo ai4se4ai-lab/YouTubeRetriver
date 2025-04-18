@@ -21,9 +21,9 @@ class AgentManager extends EventEmitter {
   constructor() {
     super();
     this.agents = {
+      gitAnalysis: gitAnalysisAgent,
       contentAnalysis: contentAnalysisAgent,
       knowledgeRetrieval: knowledgeRetrievalAgent,
-      gitAnalysis: gitAnalysisAgent, // Add Git Analysis Agent
       analogyGeneration: analogyGenerationAgent,
       analogyValidation: analogyValidationAgent,
       analogyRefinement: analogyRefinementAgent,
@@ -37,16 +37,60 @@ class AgentManager extends EventEmitter {
     this.currentState = {};
     this.activeSession = null;
     this.gitPollingInterval = null;
+
+    // Start Git monitoring by default when the system initializes
+    this.startDefaultGitMonitoring();
+  }
+
+  /**
+   * Start default Git repository monitoring
+   */
+  startDefaultGitMonitoring() {
+    if (process.env.GIT_REPO_URL) {
+      console.log("Starting default Git repository monitoring");
+
+      // Start polling at a shorter interval (30 seconds)
+      this.gitPollingInterval = setInterval(async () => {
+        try {
+          console.log("Default polling: Checking Git repository for changes");
+
+          const gitAgent = this.agents.gitAnalysis;
+
+          // Connect if not already connected
+          if (!gitAgent.isConnected) {
+            await gitAgent.connectToRepository();
+          }
+
+          // Check for changes
+          const changeData = await gitAgent.checkForChanges();
+
+          if (changeData.hasChanges) {
+            console.log("Default polling: Git changes detected!");
+
+            // Emit an event that can be listened for by the server
+            this.emit("gitChangesDetected", {
+              changeData,
+              timestamp: new Date().toISOString(),
+              automatic: true, // Flag to indicate this was from automatic monitoring
+            });
+          }
+        } catch (error) {
+          console.error("Error in default Git monitoring:", error);
+        }
+      }, 30000); // Check every 30 seconds
+    }
   }
 
   /**
    * Stop Git repository polling
    */
   stopGitRepositoryPolling() {
+    console.log("git 3.");
     if (this.gitPollingInterval) {
       console.log("Stopping Git repository polling");
       clearInterval(this.gitPollingInterval);
       this.gitPollingInterval = null;
+      console.log("git 4.");
     }
   }
 
@@ -55,6 +99,7 @@ class AgentManager extends EventEmitter {
    * @param {Object} options - Options including Git repository settings
    */
   startGitRepositoryPolling(options) {
+    console.log("git 2.");
     // Clear any existing polling
     this.stopGitRepositoryPolling();
 
@@ -257,6 +302,7 @@ class AgentManager extends EventEmitter {
     };
 
     try {
+      console.log("git 1.");
       // Start Git polling if enabled
       if (options && options.enableGitAnalysis) {
         this.startGitRepositoryPolling(options);
@@ -283,7 +329,11 @@ class AgentManager extends EventEmitter {
           status: "starting",
         });
 
+        console.log(
+          "Before await this.agents.gitAnalysis.analyzeChanges() ...."
+        );
         gitAnalysisResult = await this.agents.gitAnalysis.analyzeChanges();
+        console.log("Git Analysis completed:", !!gitAnalysisResult);
         this.updateState("gitAnalysis", gitAnalysisResult);
 
         // Wait for user approval and get edited content if any

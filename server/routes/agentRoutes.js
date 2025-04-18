@@ -96,4 +96,47 @@ router.post(
   }
 );
 
+// Trigger Git analysis manually
+router.post(
+  "/trigger-git-analysis",
+  helpers.authenticateToken,
+  async (req, res) => {
+    try {
+      const { sessionId } = req.body;
+      console.log(`Manually triggering Git analysis for session ${sessionId}`);
+
+      // Get the Git agent via the manager
+      const agentManager = agentService.initAgents();
+      const result = await agentManager.triggerGitAnalysis();
+
+      // Emit the result via socket
+      const io = req.app.get("io");
+      if (io && sessionId) {
+        io.to(sessionId).emit("processingStep", {
+          step: "gitAnalysis",
+          status: "completed",
+        });
+
+        io.to(sessionId).emit("stateUpdate", {
+          agent: "gitAnalysis",
+          result: result,
+          state: agentManager.getCurrentState(),
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Git analysis triggered successfully",
+        result: result,
+      });
+    } catch (error) {
+      console.error("Error triggering Git analysis:", error);
+      res.status(500).json({
+        error: "Failed to trigger Git analysis",
+        message: error.message,
+      });
+    }
+  }
+);
+
 module.exports = router;

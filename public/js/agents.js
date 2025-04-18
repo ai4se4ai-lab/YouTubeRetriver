@@ -97,6 +97,76 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  socket.on("gitChangesDetected", (data) => {
+    console.log("Git changes detected:", data);
+
+    // Add a message to the orchestrator's message area
+    addOrchestratorMessage(
+      `Git changes detected at ${new Date(
+        data.timestamp
+      ).toLocaleTimeString()}. ${
+        data.changeData.commitCount !== "unknown"
+          ? `${data.changeData.commitCount} new commits found.`
+          : "New commits detected."
+      }`,
+      true // Mark as alert to draw attention
+    );
+
+    // Optionally, if Git Analysis card exists, update it
+    const gitCard = document.getElementById("gitAnalysis-card");
+    if (gitCard) {
+      // Add a visual indicator that new changes are available
+      gitCard.classList.add("git-changes-available");
+
+      // If the Git Analysis agent is idle, you could add a button to analyze now
+      if (agentSystem.agents.gitAnalysis.status === "idle") {
+        const actionButtons = gitCard.querySelector(".agent-action-buttons");
+        if (actionButtons) {
+          // Remove any existing analyze button
+          const existingButton = actionButtons.querySelector(
+            ".analyze-git-button"
+          );
+          if (existingButton) {
+            existingButton.remove();
+          }
+
+          // Add new analyze button
+          const analyzeButton = document.createElement("button");
+          analyzeButton.className = "btn analyze-git-button pulse-attention";
+          analyzeButton.textContent = "Analyze New Changes";
+          analyzeButton.onclick = triggerGitAnalysis;
+          actionButtons.appendChild(analyzeButton);
+        }
+      }
+    }
+  });
+
+  // Function to trigger Git analysis
+  function triggerGitAnalysis() {
+    if (!agentSystem.sessionId) {
+      console.error("No active session for Git analysis");
+      return;
+    }
+
+    fetch("/api/agents/trigger-git-analysis", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${auth.getAccessToken()}`,
+      },
+      body: JSON.stringify({ sessionId: agentSystem.sessionId }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("Git analysis triggered:", data);
+        addOrchestratorMessage("Manual Git analysis triggered");
+      })
+      .catch((error) => {
+        console.error("Error triggering Git analysis:", error);
+        alert(`Failed to trigger Git analysis: ${error.message}`);
+      });
+  }
+
   // Event handlers for socket events
   function handleStateUpdate(update) {
     console.log("State update received:", update);

@@ -27,6 +27,7 @@ class GitAnalysisAgent extends BaseAgent {
    * Initialize connection to the Git repository
    * @returns {Promise<boolean>} Connection success status
    */
+  // Improve the connectToRepository method to be less destructive
   async connectToRepository() {
     try {
       // Get repository configuration from environment
@@ -61,21 +62,32 @@ class GitAnalysisAgent extends BaseAgent {
       // Check if git repo already exists at the path
       const isRepo = await this.git.checkIsRepo();
 
-      if (isRepo) {
-        // Don't reset or checkout in development mode
-        if (process.env.NODE_ENV !== "development") {
+      if (!isRepo) {
+        // Clone repo
+        await this.git.clone(formattedRepoUrl, repoPath);
+        console.log(`Repository cloned to ${repoPath}`);
+
+        // Checkout target branch
+        await this.git.checkout(targetBranch);
+      } else {
+        // Only fetch updates - don't reset or change branches in development mode
+        if (process.env.NODE_ENV === "development") {
+          // Just fetch without changing the current branch or resetting
+          await this.git.fetch("origin");
+          console.log(
+            `Development mode: Repository fetched without branch change`
+          );
+
+          // Get current branch
+          const status = await this.git.status();
+          console.log(`Currently on branch: ${status.current}`);
+        } else {
+          // In production, we can be more aggressive
           await this.git.reset("hard");
           await this.git.checkout(targetBranch);
           await this.git.pull("origin", targetBranch);
-        } else {
-          console.log(
-            "Development mode detected - skipping branch checkout and reset"
-          );
-          // Just get the current branch info
-          const status = await this.git.status();
-          console.log(`Currently on branch: ${status.current}`);
+          console.log(`Production mode: Repository updated at ${repoPath}`);
         }
-        console.log(`Repository updated at ${repoPath}`);
       }
 
       // Get latest commit hash to track changes
