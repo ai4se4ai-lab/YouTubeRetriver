@@ -61,15 +61,20 @@ class GitAnalysisAgent extends BaseAgent {
       // Check if git repo already exists at the path
       const isRepo = await this.git.checkIsRepo();
 
-      if (!isRepo) {
-        // Clone repo
-        await this.git.clone(formattedRepoUrl, repoPath);
-        console.log(`Repository cloned to ${repoPath}`);
-      } else {
-        // Reset any local changes and pull latest
-        await this.git.reset("hard");
-        await this.git.checkout(targetBranch);
-        await this.git.pull("origin", targetBranch);
+      if (isRepo) {
+        // Don't reset or checkout in development mode
+        if (process.env.NODE_ENV !== "development") {
+          await this.git.reset("hard");
+          await this.git.checkout(targetBranch);
+          await this.git.pull("origin", targetBranch);
+        } else {
+          console.log(
+            "Development mode detected - skipping branch checkout and reset"
+          );
+          // Just get the current branch info
+          const status = await this.git.status();
+          console.log(`Currently on branch: ${status.current}`);
+        }
         console.log(`Repository updated at ${repoPath}`);
       }
 
