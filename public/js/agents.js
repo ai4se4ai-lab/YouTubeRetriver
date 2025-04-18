@@ -304,17 +304,19 @@ document.addEventListener("DOMContentLoaded", () => {
         gitBranch: document.getElementById("git-branch")?.value || "main",
       };
 
-      // Validate if Git analysis is enabled
+      gitConnectionSuccessful = true; // Assume true for now
+      //Validate Git analysis if enabled
       if (options.enableGitAnalysis) {
-        if (!options.gitRepoUrl) {
-          alert("Please enter a Git repository URL for analysis.");
-          return;
+        if (!gitConnectionSuccessful) {
+          const confirmContinue = confirm(
+            "Git connection has not been tested successfully. Test connection now?"
+          );
+          if (confirmContinue) {
+            // Trigger the test connection button
+            testGitConnectionBtn.click();
+            return; // Don't continue until connection is tested
+          }
         }
-        // Log for debugging
-        console.log("Git analysis enabled with options:", {
-          url: options.gitRepoUrl,
-          branch: options.gitBranch,
-        });
       }
 
       // Validate options

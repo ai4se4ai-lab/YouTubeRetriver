@@ -11,6 +11,10 @@ const fs = require("fs");
 const { promisify } = require("util");
 const exec = promisify(require("child_process").exec);
 
+// Get the absolute path of the project root directory
+const projectRootDir = path.resolve(__dirname, "../../../");
+console.log(`Project root directory: ${projectRootDir}`);
+
 class GitAnalysisAgent extends BaseAgent {
   constructor() {
     super(

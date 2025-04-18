@@ -257,6 +257,34 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Load Git configuration from server
+  async function loadGitConfigFromServer() {
+    try {
+      const response = await fetch("/api/agents/git-config", {
+        headers: {
+          Authorization: `Bearer ${auth.getAccessToken()}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (configRepoUrl) {
+          configRepoUrl.textContent = data.repoUrl || "Not configured";
+        }
+        if (configBranch) {
+          configBranch.textContent = data.targetBranch || "main";
+        }
+      } else {
+        if (configRepoUrl) configRepoUrl.textContent = "Error loading";
+        if (configBranch) configBranch.textContent = "Error loading";
+      }
+    } catch (error) {
+      console.error("Error loading Git config:", error);
+      if (configRepoUrl) configRepoUrl.textContent = "Error loading";
+      if (configBranch) configBranch.textContent = "Error loading";
+    }
+  }
+
   // Start agent processing function
   async function startAgentProcessing() {
     try {
