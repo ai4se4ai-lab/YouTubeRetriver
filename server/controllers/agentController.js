@@ -3,6 +3,7 @@
  * Handles agent-related routes and WebSocket communication
  */
 const agentService = require("../services/agentService");
+const config = require("../config/config");
 
 // Store active sessions and approval callbacks
 const pendingApprovals = new Map();
@@ -17,6 +18,7 @@ module.exports = {
       const accessToken = req.token;
 
       console.log("Starting agent processing with options:", options);
+      console.log("Agent approval configuration:", config.agentApprovals);
 
       // Initialize a new session
       const activeSessionId = agentService.startSession(sessionId);
@@ -26,7 +28,34 @@ module.exports = {
 
       // Define approval callback
       const approvalCallback = (step, result) => {
-        // Existing callback code...
+        console.log(`APPROVAL CALLBACK INVOKED for step: ${step}`);
+
+        return new Promise((resolve, reject) => {
+          console.log(`Creating promise for approval of step: ${step}`);
+
+          // Create a new entry in the pending approvals map
+          if (!pendingApprovals.get(activeSessionId)) {
+            pendingApprovals.set(activeSessionId, new Map());
+          }
+
+          pendingApprovals
+            .get(activeSessionId)
+            .set(step, { resolve, reject, result });
+
+          // Emit event to notify UI
+          const io = req.app.get("io");
+          if (io) {
+            console.log(
+              `Emitting 'processingStep' event with status 'waiting' for step ${step}`
+            );
+            io.to(activeSessionId).emit("processingStep", {
+              step: step,
+              status: "waiting",
+            });
+          } else {
+            console.error("Socket.IO instance not found in req.app");
+          }
+        });
       };
 
       // Start processing in the background
@@ -34,6 +63,7 @@ module.exports = {
         .processYouTubeData(accessToken, options, approvalCallback)
         .then((results) => {
           // Processing completed
+          console.log("Processing completed successfully");
           // Clean up
           pendingApprovals.delete(activeSessionId);
         })
@@ -63,11 +93,17 @@ module.exports = {
   async approveStep(req, res) {
     try {
       const { sessionId, step, editedContent } = req.body;
+      console.log(
+        `Received approval request for session ${sessionId}, step ${step}`
+      );
 
       if (
         !pendingApprovals.has(sessionId) ||
         !pendingApprovals.get(sessionId).has(step)
       ) {
+        console.error(
+          `No pending approval found for session ${sessionId}, step ${step}`
+        );
         return res
           .status(404)
           .json({ error: "No pending approval found for this step" });
@@ -75,6 +111,9 @@ module.exports = {
 
       // Get the resolver function and original result
       const { resolve, result } = pendingApprovals.get(sessionId).get(step);
+      console.log(
+        `Found pending approval for ${step}, proceeding with resolution`
+      );
 
       // Create a copy of the result to avoid reference issues
       const approvedResult = JSON.parse(JSON.stringify(result));
@@ -91,7 +130,18 @@ module.exports = {
       pendingApprovals.get(sessionId).delete(step);
 
       // Resolve the promise to continue processing with the potentially modified result
+      console.log(`Resolving promise for ${step}`);
       resolve(approvedResult);
+
+      // Notify all clients via socket
+      const io = req.app.get("io");
+      if (io) {
+        console.log(`Emitting stepApproved event for ${step}`);
+        io.to(sessionId).emit("stepApproved", {
+          step,
+          wasEdited: !!editedContent,
+        });
+      }
 
       res.json({
         success: true,
@@ -114,11 +164,17 @@ module.exports = {
   async terminateProcess(req, res) {
     try {
       const { sessionId, step, reason } = req.body;
+      console.log(
+        `Received termination request for session ${sessionId}, step ${step}`
+      );
 
       if (
         !pendingApprovals.has(sessionId) ||
         !pendingApprovals.get(sessionId).has(step)
       ) {
+        console.error(
+          `No pending approval found for session ${sessionId}, step ${step}`
+        );
         return res
           .status(404)
           .json({ error: "No pending approval found for this step" });
@@ -137,11 +193,13 @@ module.exports = {
       });
 
       // Reject the promise to stop processing
+      console.log(`Rejecting promise for ${step} to terminate workflow`);
       reject(new Error("Process terminated by user"));
 
       // Notify all clients subscribed to this session via socket
       const io = req.app.get("io");
       if (io) {
+        console.log(`Emitting processTerminated event for ${step}`);
         io.to(sessionId).emit("processTerminated", {
           step,
           reason: reason || "User rejected step",
@@ -167,6 +225,7 @@ module.exports = {
   async submitFeedback(req, res) {
     try {
       const { feedback, sessionId } = req.body;
+      console.log(`Received feedback for session ${sessionId}`);
 
       // Check for termination phrases
       const terminationPhrases = [
@@ -186,6 +245,7 @@ module.exports = {
       );
 
       if (isTerminating) {
+        console.log("Termination phrase detected in feedback");
         // User wants to terminate - just return success
         return res.json({
           success: true,
@@ -201,11 +261,13 @@ module.exports = {
       );
 
       if (!explanationResult) {
+        console.error("No explanation found to provide feedback on");
         return res
           .status(400)
           .json({ error: "No explanation found to provide feedback on" });
       }
 
+      console.log("Processing feedback with explanation result");
       // Process feedback
       const feedbackResults = await agentService.submitFeedback(
         feedback,
@@ -231,12 +293,14 @@ module.exports = {
   async getStatus(req, res) {
     try {
       const { sessionId } = req.params;
+      console.log(`Getting status for session ${sessionId}`);
 
       // Get current state
       const state = agentService.getCurrentState();
 
       // Check if this is the active session
       if (state.sessionId !== sessionId) {
+        console.error(`Session ${sessionId} not found or no longer active`);
         return res
           .status(404)
           .json({ error: "Session not found or no longer active" });
@@ -246,6 +310,8 @@ module.exports = {
       const pending = pendingApprovals.has(sessionId)
         ? Array.from(pendingApprovals.get(sessionId).keys())
         : [];
+
+      console.log(`Pending approvals for session ${sessionId}:`, pending);
 
       res.json({
         state,
@@ -267,11 +333,17 @@ module.exports = {
   async getPendingStepDetails(req, res) {
     try {
       const { sessionId, step } = req.params;
+      console.log(
+        `Getting pending step details for session ${sessionId}, step ${step}`
+      );
 
       if (
         !pendingApprovals.has(sessionId) ||
         !pendingApprovals.get(sessionId).has(step)
       ) {
+        console.error(
+          `No pending approval found for session ${sessionId}, step ${step}`
+        );
         return res
           .status(404)
           .json({ error: "No pending approval found for this step" });
@@ -279,6 +351,7 @@ module.exports = {
 
       // Get the result
       const { result } = pendingApprovals.get(sessionId).get(step);
+      console.log(`Found pending approval details for ${step}`);
 
       res.json({
         step,
@@ -310,6 +383,7 @@ module.exports = {
       // Listen for step approval
       socket.on("approveStep", (data) => {
         const { sessionId, step, editedContent } = data;
+        console.log(`Socket approveStep event for ${sessionId}, step ${step}`);
 
         if (
           pendingApprovals.has(sessionId) &&
@@ -344,12 +418,17 @@ module.exports = {
             step,
             wasEdited: !!editedContent,
           });
+        } else {
+          console.error(
+            `No pending approval found for socket approval of ${step}`
+          );
         }
       });
 
       // Listen for step rejection/termination
       socket.on("rejectStep", (data) => {
         const { sessionId, step, reason } = data;
+        console.log(`Socket rejectStep event for ${sessionId}, step ${step}`);
 
         if (
           pendingApprovals.has(sessionId) &&
@@ -379,6 +458,10 @@ module.exports = {
 
           // Reject the promise to stop processing
           reject(new Error("Process terminated by user"));
+        } else {
+          console.error(
+            `No pending approval found for socket rejection of ${step}`
+          );
         }
       });
 
@@ -386,6 +469,7 @@ module.exports = {
       socket.on("feedback", async (data) => {
         try {
           const { feedback, sessionId } = data;
+          console.log(`Socket feedback event for ${sessionId}`);
 
           // Check for termination phrases
           const terminationPhrases = [
@@ -406,6 +490,7 @@ module.exports = {
 
           if (isTerminating) {
             // User wants to terminate - just notify the clients
+            console.log("Termination phrase detected in socket feedback");
             io.to(sessionId).emit("processFeedbackTerminated", {
               message: "Process completed by user request",
             });
@@ -420,6 +505,7 @@ module.exports = {
 
           if (explanationResult) {
             // Show that feedback processing is starting
+            console.log("Processing socket feedback with explanation result");
             io.to(sessionId).emit("processingStep", {
               step: "userFeedback",
               status: "starting",
@@ -439,6 +525,8 @@ module.exports = {
               step: "learning",
               status: "starting",
             });
+          } else {
+            console.error("No explanation found for socket feedback");
           }
         } catch (error) {
           console.error("Error processing socket feedback:", error);
@@ -449,6 +537,7 @@ module.exports = {
       // Listen for orchestrator updates from clients
       socket.on("orchestratorUpdate", (data) => {
         if (data.sessionId) {
+          console.log(`Socket orchestratorUpdate event for ${data.sessionId}`);
           // Forward the update to all clients in the session
           io.to(data.sessionId).emit("orchestratorUpdate", {
             timestamp: new Date().toISOString(),
@@ -463,17 +552,18 @@ module.exports = {
       });
     });
 
-    // Remove this problematic line
-    // io.app.set('io', io);
-
     // Set up event listeners for agent state updates
     const agentManager = agentService.initAgents();
 
     agentManager.on("stateUpdate", (update) => {
+      console.log(`Agent state update for ${update.agent}`);
       io.to(update.state.sessionId).emit("stateUpdate", update);
     });
 
     agentManager.on("processingStep", (stepInfo) => {
+      console.log(
+        `Processing step event: ${stepInfo.step} - ${stepInfo.status}`
+      );
       io.to(agentManager.getCurrentState().sessionId).emit(
         "processingStep",
         stepInfo
@@ -482,6 +572,9 @@ module.exports = {
 
     // Add listener for orchestrator updates
     agentManager.on("orchestratorUpdate", (update) => {
+      console.log(
+        `Orchestrator update: ${update.message?.substring(0, 50)}...`
+      );
       io.to(agentManager.getCurrentState().sessionId).emit(
         "orchestratorUpdate",
         update
@@ -489,62 +582,16 @@ module.exports = {
     });
 
     agentManager.on("error", (error) => {
+      console.error(`Agent error: ${error.message}`);
       io.to(error.state.sessionId).emit("error", error);
     });
 
     agentManager.on("terminated", (terminationInfo) => {
+      console.log(`Workflow terminated: ${terminationInfo.reason}`);
       io.to(terminationInfo.sessionId).emit(
         "processTerminated",
         terminationInfo
       );
     });
-  },
-  /**
-   * Test Git repository connection
-   */
-  async testGitConnection(req, res) {
-    try {
-      const { gitRepoUrl, gitBranch } = req.body;
-
-      console.log("Testing Git connection:", gitRepoUrl, gitBranch);
-
-      // Set environment variables temporarily
-      process.env.GIT_REPO_URL = gitRepoUrl;
-      process.env.GIT_TARGET_BRANCH = gitBranch || "main";
-
-      // Get the Git Analysis Agent
-      const gitAgent = agentService.getAgent("gitAnalysis");
-
-      if (!gitAgent) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Git Analysis Agent not found" });
-      }
-
-      // Try to connect to the repository
-      const connected = await gitAgent.connectToRepository();
-
-      if (connected) {
-        res.json({
-          success: true,
-          message: "Git repository connection successful",
-          repoUrl: gitRepoUrl,
-          branch: gitBranch || "main",
-        });
-      } else {
-        res.status(400).json({
-          success: false,
-          message: "Failed to connect to Git repository",
-          error: gitAgent.error || "Unknown error",
-        });
-      }
-    } catch (error) {
-      console.error("Error testing Git connection:", error);
-      res.status(500).json({
-        success: false,
-        message: "Error testing Git connection",
-        error: error.message,
-      });
-    }
   },
 };

@@ -238,7 +238,13 @@ class AgentManager extends EventEmitter {
 
     // Modified approval function that checks the configuration
     const conditionalApproval = async (agentName, result) => {
+      console.log(
+        `Checking if ${agentName} requires user approval based on configuration`
+      );
       if (needsApproval(agentName)) {
+        console.log(
+          `User approval required for ${agentName} based on configuration`
+        );
         // Request approval from user
         return approvalCallback(agentName, result);
       } else {
