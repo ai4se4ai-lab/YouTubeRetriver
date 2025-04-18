@@ -50,6 +50,15 @@ const config = {
     maxFileAge: 60 * 60 * 1000, // 1 hour in milliseconds
   },
 
+  // Agent approval settings
+  agentApprovals: {
+    required: process.env.REQUIRED_AGENT_APPROVALS
+      ? process.env.REQUIRED_AGENT_APPROVALS === "all"
+        ? "all"
+        : process.env.REQUIRED_AGENT_APPROVALS.split(",")
+      : "none",
+  },
+
   // LLM Agent settings
   agents: {
     openaiApiKey: process.env.OPENAI_API_KEY,

@@ -3,6 +3,7 @@
  * Centralizes access to all agents and manages their execution
  */
 const EventEmitter = require("events");
+const config = require("../config/config");
 
 // Import all agents
 const contentAnalysisAgent = require("./dal/ContentAnalysisAgent");
@@ -225,6 +226,30 @@ class AgentManager extends EventEmitter {
       this.initSession();
     }
 
+    // Check which agents require approval
+    const requiredApprovals = config.agentApprovals.required;
+
+    // Helper function to determine if an agent needs approval
+    const needsApproval = (agentName) => {
+      if (requiredApprovals === "all") return true;
+      if (requiredApprovals === "none") return false;
+      return requiredApprovals.includes(agentName);
+    };
+
+    // Modified approval function that checks the configuration
+    const conditionalApproval = async (agentName, result) => {
+      if (needsApproval(agentName)) {
+        // Request approval from user
+        return approvalCallback(agentName, result);
+      } else {
+        // Skip approval and continue immediately
+        console.log(
+          `Skipping approval for ${agentName} based on configuration`
+        );
+        return result;
+      }
+    };
+
     try {
       // Start Git polling if enabled
       if (options && options.enableGitAnalysis) {
@@ -256,7 +281,7 @@ class AgentManager extends EventEmitter {
         this.updateState("gitAnalysis", gitAnalysisResult);
 
         // Wait for user approval and get edited content if any
-        const approvedGitAnalysis = await approvalCallback(
+        const approvedGitAnalysis = await conditionalApproval(
           "gitAnalysis",
           gitAnalysisResult
         );
@@ -273,6 +298,7 @@ class AgentManager extends EventEmitter {
         );
 
         gitAnalysisResult = finalGitAnalysis;
+        console.log("Git Analysis Result:", gitAnalysisResult);
       }
 
       // Step 2: Content Analysis
@@ -294,7 +320,7 @@ class AgentManager extends EventEmitter {
         this.updateState("contentAnalysis", contentAnalysisResult);
 
         // Wait for user approval and get edited content if any
-        const approvedContentAnalysis = await approvalCallback(
+        const approvedContentAnalysis = await conditionalApproval(
           "contentAnalysis",
           contentAnalysisResult
         );
@@ -329,7 +355,7 @@ class AgentManager extends EventEmitter {
         this.updateState("knowledgeRetrieval", knowledgeResult);
 
         // Wait for user approval and get edited content if any
-        const approvedKnowledgeResult = await approvalCallback(
+        const approvedKnowledgeResult = await conditionalApproval(
           "knowledgeRetrieval",
           knowledgeResult
         );
@@ -366,7 +392,7 @@ class AgentManager extends EventEmitter {
       this.updateState("analogyGeneration", analogiesResult);
 
       // Wait for user approval and get edited content if any
-      const approvedAnalogiesResult = await approvalCallback(
+      const approvedAnalogiesResult = await conditionalApproval(
         "analogyGeneration",
         analogiesResult
       );
@@ -397,7 +423,7 @@ class AgentManager extends EventEmitter {
       this.updateState("analogyValidation", validationResult);
 
       // Wait for user approval and get edited content if any
-      const approvedValidationResult = await approvalCallback(
+      const approvedValidationResult = await conditionalApproval(
         "analogyValidation",
         validationResult
       );
@@ -428,7 +454,7 @@ class AgentManager extends EventEmitter {
       this.updateState("analogyRefinement", refinementResult);
 
       // Wait for user approval and get edited content if any
-      const approvedRefinementResult = await approvalCallback(
+      const approvedRefinementResult = await conditionalApproval(
         "analogyRefinement",
         refinementResult
       );
@@ -458,7 +484,7 @@ class AgentManager extends EventEmitter {
       this.updateState("explanation", explanationResult);
 
       // Wait for user approval and get edited content if any
-      const approvedExplanationResult = await approvalCallback(
+      const approvedExplanationResult = await conditionalApproval(
         "explanation",
         explanationResult
       );
