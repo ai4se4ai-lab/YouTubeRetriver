@@ -27,7 +27,6 @@ class GitAnalysisAgent extends BaseAgent {
    * Initialize connection to the Git repository
    * @returns {Promise<boolean>} Connection success status
    */
-  // Improve the connectToRepository method to be less destructive
   async connectToRepository() {
     try {
       // Get repository configuration from environment
@@ -62,66 +61,52 @@ class GitAnalysisAgent extends BaseAgent {
       // Check if git repo already exists at the path
       const isRepo = await this.git.checkIsRepo();
 
-      if (isRepo) {
-        // Don't reset or checkout in development mode
+      if (!isRepo) {
+        // Clone repo
+        await this.git.clone(formattedRepoUrl, repoPath);
+        console.log(`Repository cloned to ${repoPath}`);
+
         if (process.env.NODE_ENV !== "development") {
-          await this.git.reset("hard");
+          // Only in non-development mode, checkout the target branch
           await this.git.checkout(targetBranch);
-          await this.git.pull("origin", targetBranch);
-        } else {
+        }
+      } else {
+        // Development mode: be extremely careful not to disrupt anything
+        if (process.env.NODE_ENV === "development") {
+          // Just fetch without changing the current branch or resetting
+          await this.git.fetch("origin");
           console.log(
-            "Development mode detected - skipping branch checkout and reset"
+            `Development mode: Repository fetched without branch change`
           );
-          // Just get the current branch info
+
+          // Get current branch
           const status = await this.git.status();
           console.log(`Currently on branch: ${status.current}`);
-        }
-        console.log(`Repository updated at ${repoPath}`);
-      } else {
-        // Reset any local changes and pull latest
-        console.log(
-          "GitAnalysisAgent: Resetting and updating existing repository"
-        );
-        try {
+        } else {
+          // Production mode can be more aggressive
           await this.git.reset("hard");
           await this.git.checkout(targetBranch);
           await this.git.pull("origin", targetBranch);
-          console.log(`GitAnalysisAgent: Repository updated at ${repoPath}`);
-        } catch (updateError) {
-          console.error(
-            `GitAnalysisAgent: Update error: ${updateError.message}`
-          );
-          throw updateError;
+          console.log(`Production mode: Repository updated at ${repoPath}`);
         }
       }
 
-      // Get latest commit hash to track changes
-      try {
-        console.log("GitAnalysisAgent: Getting latest commit hash");
-        const latestCommit = await this.git.revparse(["HEAD"]);
-        console.log(`GitAnalysisAgent: Latest commit: ${latestCommit}`);
-        this.lastAnalyzedCommit = latestCommit;
-        this.isConnected = true;
-      } catch (revparseError) {
-        console.error(
-          `GitAnalysisAgent: Revparse error: ${revparseError.message}`
-        );
-        throw revparseError;
-      }
+      // Get latest commit hash to track changes (without changing branches)
+      const latestCommit = await this.git.revparse(["HEAD"]);
+      this.lastAnalyzedCommit = latestCommit;
+      this.isConnected = true;
 
-      console.log("GitAnalysisAgent: Repository connection successful");
       return true;
     } catch (error) {
-      console.error(`GitAnalysisAgent: Connection error: ${error.message}`);
+      console.error("Error connecting to Git repository:", error);
       this.error = error.message;
       this.isConnected = false;
       return false;
     }
   }
-
   /**
    * Check for new commits or pull requests on the target branch
-   * @returns {Promise<Array>} New commit data if available
+   * @returns {Promise<Object>} New commit data if available
    */
   async checkForChanges() {
     if (!this.isConnected) {
@@ -131,44 +116,108 @@ class GitAnalysisAgent extends BaseAgent {
     try {
       const targetBranch = process.env.GIT_TARGET_BRANCH || "main";
 
-      // Pull latest changes
-      await this.git.checkout(targetBranch);
-      await this.git.pull("origin", targetBranch);
+      // In development mode, don't try to checkout the target branch
+      // Instead, just fetch the latest changes and compare
+      if (process.env.NODE_ENV === "development") {
+        console.log("Development mode: Fetching updates without checkout");
 
-      // Get latest commit
-      const latestCommit = await this.git.revparse(["HEAD"]);
+        // Just fetch the latest changes
+        await this.git.fetch("origin");
 
-      // If no previous commit or new commits are available
-      if (
-        !this.lastAnalyzedCommit ||
-        latestCommit !== this.lastAnalyzedCommit
-      ) {
-        // Get commit range to analyze
-        const commitRange = this.lastAnalyzedCommit
-          ? `${this.lastAnalyzedCommit}..${latestCommit}`
-          : latestCommit;
+        // Get the current branch
+        const status = await this.git.status();
+        console.log(`Currently on branch: ${status.current}`);
 
-        // Get commit details
-        const commitLog = await this.git.log({
-          from: this.lastAnalyzedCommit || "",
-          to: latestCommit,
-        });
+        // Get the latest commit on the current branch
+        const latestCommit = await this.git.revparse(["HEAD"]);
 
-        // Update last analyzed commit
-        this.lastAnalyzedCommit = latestCommit;
+        // If no previous commit or new commits are available
+        if (
+          !this.lastAnalyzedCommit ||
+          latestCommit !== this.lastAnalyzedCommit
+        ) {
+          // Get commit range to analyze
+          const commitRange = this.lastAnalyzedCommit
+            ? `${this.lastAnalyzedCommit}..${latestCommit}`
+            : latestCommit;
+
+          // Get commit details
+          const commitLog = await this.git.log({
+            from: this.lastAnalyzedCommit || "",
+            to: latestCommit,
+          });
+
+          // Update last analyzed commit
+          this.lastAnalyzedCommit = latestCommit;
+
+          return {
+            hasChanges: true,
+            commits: commitLog.all,
+            commitRange,
+            currentBranch: status.current,
+          };
+        }
 
         return {
-          hasChanges: true,
-          commits: commitLog.all,
-          commitRange,
+          hasChanges: false,
+          currentBranch: status.current,
         };
       }
+      // In production mode, we can be more aggressive with branch checkout
+      else {
+        // Pull latest changes for the target branch
+        await this.git.checkout(targetBranch);
+        await this.git.pull("origin", targetBranch);
 
-      return { hasChanges: false };
+        // Get latest commit
+        const latestCommit = await this.git.revparse(["HEAD"]);
+
+        // If no previous commit or new commits are available
+        if (
+          !this.lastAnalyzedCommit ||
+          latestCommit !== this.lastAnalyzedCommit
+        ) {
+          // Get commit range to analyze
+          const commitRange = this.lastAnalyzedCommit
+            ? `${this.lastAnalyzedCommit}..${latestCommit}`
+            : latestCommit;
+
+          // Get commit details
+          const commitLog = await this.git.log({
+            from: this.lastAnalyzedCommit || "",
+            to: latestCommit,
+          });
+
+          // Update last analyzed commit
+          this.lastAnalyzedCommit = latestCommit;
+
+          return {
+            hasChanges: true,
+            commits: commitLog.all,
+            commitRange,
+            currentBranch: targetBranch,
+          };
+        }
+
+        return {
+          hasChanges: false,
+          currentBranch: targetBranch,
+        };
+      }
     } catch (error) {
       console.error("Error checking for changes:", error);
       this.error = error.message;
-      return { hasChanges: false, error: error.message };
+
+      // Even in case of error, return a valid result object so the workflow can continue
+      return {
+        hasChanges: false,
+        error: error.message,
+        errorObject: error,
+        // Try to determine current branch even on error
+        currentBranch: await this.git
+          .revparse(["--abbrev-ref", "HEAD"])
+          .catch(() => "unknown"),
+      };
     }
   }
 
