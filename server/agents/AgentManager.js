@@ -1,3 +1,4 @@
+// server/agents/AgentManager.js
 /**
  * Agent Manager
  * Centralizes access to all agents and manages their execution
@@ -37,6 +38,9 @@ class AgentManager extends EventEmitter {
     this.currentState = {};
     this.activeSession = null;
     this.gitPollingInterval = null;
+
+    // Add flag to track if workflow should be triggered by Git changes
+    this.gitTriggeredWorkflow = false;
 
     // Start Git monitoring by default when the system initializes
     this.startDefaultGitMonitoring();
@@ -78,6 +82,16 @@ class AgentManager extends EventEmitter {
               timestamp: new Date().toISOString(),
               automatic: true, // Flag to indicate this was from automatic monitoring
             });
+
+            // Start a new workflow triggered by Git changes
+            // Only if not already in an active workflow
+            if (!this.activeSession || this.currentState.completed) {
+              await this.processGitChanges(changeData);
+            } else {
+              console.log(
+                "Active workflow in progress, not starting Git-triggered workflow"
+              );
+            }
           }
         } catch (error) {
           console.error("Error in default Git monitoring:", error);
@@ -90,12 +104,10 @@ class AgentManager extends EventEmitter {
    * Stop Git repository polling
    */
   stopGitRepositoryPolling() {
-    console.log("git 3.");
+    console.log("Stopping Git repository polling");
     if (this.gitPollingInterval) {
-      console.log("Stopping Git repository polling");
       clearInterval(this.gitPollingInterval);
       this.gitPollingInterval = null;
-      console.log("git 4.");
     }
   }
 
@@ -104,7 +116,6 @@ class AgentManager extends EventEmitter {
    * @param {Object} options - Options including Git repository settings
    */
   startGitRepositoryPolling(options) {
-    console.log("git 2.");
     // Clear any existing polling
     this.stopGitRepositoryPolling();
 
@@ -132,25 +143,13 @@ class AgentManager extends EventEmitter {
                 timestamp: new Date().toISOString(),
               });
 
-              // If workflow is active, trigger Git analysis
-              if (
-                this.activeSession &&
-                !this.currentState.completed &&
-                !this.currentState.terminated
-              ) {
-                console.log("Running Git analysis as part of active workflow");
-
-                this.emit("processingStep", {
-                  step: "gitAnalysis",
-                  status: "starting",
-                });
-
-                const gitAnalysisResult = await gitAgent.analyzeChanges();
-                this.updateState("gitAnalysis", gitAnalysisResult);
-
-                // Update orchestrator about the Git analysis
-                await this.#updateOrchestrator(
-                  "New Git changes detected and analyzed during workflow"
+              // Start a new workflow triggered by Git changes
+              // Only if not already in an active workflow
+              if (!this.activeSession || this.currentState.completed) {
+                await this.processGitChanges(changeData);
+              } else {
+                console.log(
+                  "Active workflow in progress, not starting Git-triggered workflow"
                 );
               }
             } else {
@@ -168,7 +167,50 @@ class AgentManager extends EventEmitter {
   }
 
   /**
-   * Initialize a new agent processing session
+   * Process Git changes detected in background monitoring
+   * @param {Object} changeData - Information about Git changes
+   * @returns {Promise<void>}
+   */
+  async processGitChanges(changeData) {
+    try {
+      console.log("Processing Git changes detected in background");
+
+      // Create a new session for this Git-triggered workflow
+      const sessionId = this.initSession();
+
+      // Notify about the new session
+      this.emit("gitWorkflowStarted", {
+        sessionId,
+        timestamp: new Date().toISOString(),
+        message: "Starting a new workflow triggered by Git changes",
+      });
+
+      // Run the workflow with Git-triggered flag
+      await this.runFullWorkflow(
+        {}, // No YouTube data needed for Git-triggered workflow
+        async (step, result) => {
+          // Auto-approve steps for background processing
+          // You could modify this to still require approvals for certain steps
+          console.log(`Auto-approving step ${step} for Git-triggered workflow`);
+          return result;
+        },
+        {
+          enableGitAnalysis: true,
+          gitTriggeredOnly: true,
+          automaticApprovals: true,
+        }
+      );
+    } catch (error) {
+      console.error("Error processing Git changes:", error);
+      this.emit("error", {
+        message: `Failed to process Git changes: ${error.message}`,
+        error,
+      });
+    }
+  }
+
+  /**
+   * Initialize a new agent session
    * @param {string} sessionId - Unique session identifier
    * @returns {string} - The active session ID
    */
@@ -276,11 +318,17 @@ class AgentManager extends EventEmitter {
       this.initSession();
     }
 
+    // Check if this should be a Git-triggered workflow
+    this.gitTriggeredWorkflow = options.gitTriggeredOnly || false;
+
     // Check which agents require approval
     const requiredApprovals = config.agentApprovals.required;
 
     // Helper function to determine if an agent needs approval
     const needsApproval = (agentName) => {
+      // Override with automatic approvals if specified
+      if (options.automaticApprovals) return false;
+
       if (requiredApprovals === "all") return true;
       if (requiredApprovals === "none") return false;
       return requiredApprovals.includes(agentName);
@@ -317,7 +365,8 @@ class AgentManager extends EventEmitter {
         dataType: "YouTube Data",
         availableAgents: Object.keys(this.agents),
         timestamp: Date.now(),
-        options: options, // Pass options to orchestrator
+        options: options,
+        gitTriggeredOnly: this.gitTriggeredWorkflow,
       });
 
       this.updateState("orchestrator", workflowPlan);
@@ -325,8 +374,10 @@ class AgentManager extends EventEmitter {
       // Start the orchestrator monitoring
       this.#startOrchestratorMonitoring();
 
-      // Step 1 (optional): Git Repository Analysis
+      // Step 1: Git Repository Analysis (now always runs first if enabled)
       let gitAnalysisResult = null;
+      let gitChangesDetected = false;
+
       if (options && options.enableGitAnalysis) {
         this.emit("processingStep", {
           step: "gitAnalysis",
@@ -337,8 +388,15 @@ class AgentManager extends EventEmitter {
           this.activeSession,
           options
         );
-        console.log("Git Analysis completed:", !!gitAnalysisResult);
+
         this.updateState("gitAnalysis", gitAnalysisResult);
+
+        // Check if Git changes were detected
+        gitChangesDetected =
+          gitAnalysisResult &&
+          gitAnalysisResult.result &&
+          gitAnalysisResult.result.output &&
+          !gitAnalysisResult.result.output.includes("no_changes");
 
         // Wait for user approval and get edited content if any
         const approvedGitAnalysis = await conditionalApproval(
@@ -354,13 +412,64 @@ class AgentManager extends EventEmitter {
 
         // Update orchestrator about progress
         await this.#updateOrchestrator(
-          "Git Analysis completed, moving to Content Analysis"
+          gitChangesDetected
+            ? "Git Analysis completed with changes detected, proceeding with workflow"
+            : "Git Analysis completed with no changes detected"
         );
 
         gitAnalysisResult = finalGitAnalysis;
-        console.log("Git Analysis Result:", gitAnalysisResult);
+
+        // If this is a Git-triggered workflow and no changes were detected, stop here
+        if (this.gitTriggeredWorkflow && !gitChangesDetected) {
+          this.emit("processingStep", {
+            step: "workflow",
+            status: "completed",
+            message: "No Git changes detected, stopping workflow",
+          });
+
+          // Complete workflow without running other agents
+          this.currentState.completed = true;
+          this.currentState.endTime = Date.now();
+          this.currentState.totalDuration =
+            this.currentState.endTime - this.currentState.startTime;
+
+          // Stop monitoring
+          this.#stopOrchestratorMonitoring();
+
+          // Return early
+          return {
+            noChangesDetected: true,
+            gitAnalysis: gitAnalysisResult,
+            sessionState: this.currentState,
+          };
+        }
+
+        // After Git Analysis is complete and changes are detected
+        if (gitChangesDetected) {
+          // Make sure to emit an event indicating the next agent should start
+          this.emit("processingStep", {
+            step: "contentAnalysis",
+            status: "starting",
+          });
+
+          // Make sure any necessary data is being passed from Git Analysis to Content Analysis
+          // For example:
+          const contentAnalysisData = {
+            // Include any relevant data from gitAnalysisResult
+            gitFindings:
+              gitAnalysisResult?.result?.output || "No Git findings available",
+          };
+
+          // Ensure there's sufficient YouTube data for the Content Analysis agent
+          if (
+            !youtubeData ||
+            (!youtubeData.likedVideos && !youtubeData.watchHistory)
+          ) {
+            console.warn("No YouTube data available for Content Analysis");
+            // Consider using sample data or skipping to Analogy Generation
+          }
+        }
       }
-      //}
 
       // Step 2: Content Analysis
       let contentAnalysisResult = null;

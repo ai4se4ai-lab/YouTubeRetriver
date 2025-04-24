@@ -1,3 +1,4 @@
+// server/agents/ccl/OrchestratorAgent.js
 /**
  * Orchestrator Agent (A6)
  * Manages workflow and coordination among all agents
@@ -16,6 +17,7 @@ class OrchestratorAgent extends BaseAgent {
     this.monitoringHistory = [];
     this.isTerminated = false;
     this.gitMonitoringActive = false;
+    this.gitTriggeredOnly = false;
   }
 
   /**
@@ -30,9 +32,29 @@ class OrchestratorAgent extends BaseAgent {
     this.gitMonitoringActive =
       inputData.options && inputData.options.enableGitAnalysis;
 
+    // Check if this is a Git-triggered only workflow
+    this.gitTriggeredOnly =
+      inputData.options && inputData.options.gitTriggeredOnly;
+
     // Modify prompt for Git analysis if enabled
     let modifiedPrompt = this.prompt;
-    if (this.gitMonitoringActive) {
+
+    // Make sure the orchestrator knows to continue the workflow after Git changes
+    if (this.gitChangesDetected) {
+      modifiedPrompt = `${this.prompt}
+        "Git Analysis completed with changes detected, now starting Content Analysis"`;
+    }
+
+    if (this.gitTriggeredOnly) {
+      modifiedPrompt = `${this.prompt}
+      
+IMPORTANT: This workflow is triggered by Git changes. You should:
+1. Prioritize the Git Analysis Agent (A20) as the first step
+2. Only proceed with other agents if Git changes are detected
+3. Focus on relating the detected code changes to analogies that would help understand the code
+4. Monitor the Git Analysis process continuously`;
+    } else if (this.gitMonitoringActive) {
+      // Continuing server/agents/ccl/OrchestratorAgent.js
       modifiedPrompt = `${this.prompt}
       
 IMPORTANT: This workflow includes Git repository analysis for code issues. You should:
@@ -51,6 +73,7 @@ IMPORTANT: This workflow includes Git repository analysis for code issues. You s
         event: "Workflow initialized",
         details: "Initial workflow plan created",
         includesGitAnalysis: this.gitMonitoringActive,
+        isGitTriggered: this.gitTriggeredOnly,
       },
     ];
 
@@ -68,9 +91,14 @@ IMPORTANT: This workflow includes Git repository analysis for code issues. You s
       ? "This workflow includes Git repository analysis. Pay special attention to the Git Analysis Agent's progress and results. "
       : "";
 
+    // Add specific instructions for Git-triggered workflows
+    const gitTriggeredContext = this.gitTriggeredOnly
+      ? "This workflow was triggered by Git changes. The workflow should only proceed if code changes were detected by the Git Analysis Agent. "
+      : "";
+
     const monitoringPrompt = `${this.prompt} 
 
-${termState}${gitContext}You are now actively monitoring the execution of a multi-agent workflow. Your role is to:
+${termState}${gitContext}${gitTriggeredContext}You are now actively monitoring the execution of a multi-agent workflow. Your role is to:
 
 1. Continuously observe all agent states and identify any issues or bottlenecks
 2. Detect if any agent is stuck or not progressing as expected
@@ -94,6 +122,7 @@ Otherwise, provide a brief status summary and any optimization recommendations.
       event: "Monitoring check",
       timeSinceLastCheck: `${Math.round(timeSinceLastCheck / 1000)} seconds`,
       gitMonitoringActive: this.gitMonitoringActive,
+      gitTriggeredOnly: this.gitTriggeredOnly,
     });
 
     const formattedInput = {
@@ -105,6 +134,7 @@ Otherwise, provide a brief status summary and any optimization recommendations.
       timestamp: new Date().toISOString(),
       isTerminated: this.isTerminated,
       gitMonitoringActive: this.gitMonitoringActive,
+      gitTriggeredOnly: this.gitTriggeredOnly,
     };
 
     return this.process(formattedInput, monitoringPrompt);
@@ -126,9 +156,14 @@ Otherwise, provide a brief status summary and any optimization recommendations.
       ? "This workflow included Git repository analysis. Be sure to include the Git Analysis Agent's contributions and findings in your summary. "
       : "";
 
+    // Add context for Git-triggered workflows
+    const gitTriggeredContext = this.gitTriggeredOnly
+      ? "This workflow was triggered automatically by Git changes. "
+      : "";
+
     const summaryPrompt = `${this.prompt} 
     
-${termStatus}${gitContext}Your task is to summarize the entire workflow execution. Analyze the following:
+${termStatus}${gitContext}${gitTriggeredContext}Your task is to summarize the entire workflow execution. Analyze the following:
 
 1. Overall effectiveness and efficiency of the multi-agent system
 2. Key strengths and weaknesses identified throughout the process
@@ -160,6 +195,7 @@ Organize your response into clearly labeled sections.`;
       timestamp: new Date().toISOString(),
       isTerminated: this.isTerminated,
       gitMonitoringActive: this.gitMonitoringActive,
+      gitTriggeredOnly: this.gitTriggeredOnly,
     };
 
     return this.process(formattedInput, summaryPrompt);
@@ -196,6 +232,7 @@ Provide concise but thorough guidance to optimize this agent's performance.`;
       previousResults,
       timestamp: new Date().toISOString(),
       isGitAnalysisAgent: agentName === "gitAnalysis",
+      gitTriggeredOnly: this.gitTriggeredOnly,
     };
 
     // Record this oversight event
@@ -204,6 +241,7 @@ Provide concise but thorough guidance to optimize this agent's performance.`;
       event: "Agent oversight",
       agent: agentName,
       isGitAnalysisAgent: agentName === "gitAnalysis",
+      gitTriggeredOnly: this.gitTriggeredOnly,
     });
 
     return this.process(formattedInput, oversightPrompt);
@@ -218,6 +256,7 @@ Provide concise but thorough guidance to optimize this agent's performance.`;
     this.monitoringHistory = [];
     this.isTerminated = false;
     this.gitMonitoringActive = false;
+    this.gitTriggeredOnly = false;
   }
 
   /**
@@ -247,6 +286,8 @@ Format your response as a detailed termination report.`;
       event: "Workflow terminated",
       reason: terminationData.reason,
       rejectedStep: terminationData.rejectedStep,
+      gitMonitoringActive: this.gitMonitoringActive,
+      gitTriggeredOnly: this.gitTriggeredOnly,
     });
 
     return this.process(terminationData, terminationPrompt);
@@ -260,6 +301,8 @@ Format your response as a detailed termination report.`;
     this.lastMonitoringTime = null;
     this.monitoringHistory = [];
     this.isTerminated = false;
+    this.gitMonitoringActive = false;
+    this.gitTriggeredOnly = false;
   }
 }
 

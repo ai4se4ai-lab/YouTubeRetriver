@@ -73,6 +73,41 @@ document.addEventListener("DOMContentLoaded", () => {
     if (typeof io !== "undefined") {
       agentSystem.socket = io();
 
+      // Add socket event handler
+      agentSystem.socket.on("gitWorkflowStarted", (data) => {
+        console.log("Git-triggered workflow started:", data);
+
+        // Show notification to the user
+        addOrchestratorMessage(
+          `Git-triggered workflow started at ${new Date(
+            data.timestamp
+          ).toLocaleTimeString()}: ${data.message}`,
+          true // Mark as alert to draw attention
+        );
+
+        // If we're not already in an active workflow, switch to this session
+        if (!agentSystem.workflow.started || agentSystem.workflow.completed) {
+          // Subscribe to the new session
+          agentSystem.socket.emit("subscribe", data.sessionId);
+          agentSystem.sessionId = data.sessionId;
+          agentSystem.workflow.started = true;
+          agentSystem.workflow.completed = false;
+
+          // Show agent system UI if not already visible
+          document.getElementById("agent-system").classList.remove("hidden");
+          document.getElementById("results-section").classList.remove("hidden");
+
+          // Reset agent state for the new session
+          resetAgentSystem();
+
+          // Update UI
+          updateUI();
+
+          // Start polling for status
+          startStatusPolling();
+        }
+      });
+
       // Socket event listeners
       agentSystem.socket.on("connect", () => {
         console.log("Socket connected");
@@ -285,7 +320,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Start agent processing
-  async function startAgentProcessing() {
+  async function startAgentProcessing(gitTriggeredOnly = false) {
     try {
       // Check if user is authenticated
       if (!auth.isAuthenticated()) {
@@ -300,8 +335,7 @@ document.addEventListener("DOMContentLoaded", () => {
         maxResults: parseInt(document.getElementById("max-results").value, 10),
         enableGitAnalysis:
           document.getElementById("git-analysis").checked || false,
-        gitRepoUrl: document.getElementById("git-repo-url")?.value || "",
-        gitBranch: document.getElementById("git-branch")?.value || "main",
+        gitTriggeredOnly: gitTriggeredOnly, // Add this option
       };
 
       gitConnectionSuccessful = true; // Assume true for now

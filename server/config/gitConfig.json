@@ -6,7 +6,7 @@
     "token": "",
     "scanInterval": 60000
   },
-  "reposDirectory": "C:/temp/git-analysis-repos",
+  "reposDirectory": "./../temp/git-repos",
   "cleanupDelay": 5000,
   "maxConcurrentSessions": 10
 }

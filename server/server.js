@@ -1,3 +1,4 @@
+// server/server.js
 /**
  * Main server file
  */
@@ -54,10 +55,29 @@ agentManager.on("gitChangesDetected", async (changeInfo) => {
     },
   });
 
-  // If automatic and we have active sessions, we could trigger analysis
+  // If automatic mode is enabled, start a new workflow
   if (changeInfo.automatic) {
-    console.log("Automatic Git change detection, notifying clients");
+    console.log("Automatic Git change detection, starting analysis workflow");
+
+    try {
+      // Start a new Git-triggered workflow
+      await agentManager.processGitChanges(changeInfo.changeData);
+    } catch (error) {
+      console.error("Error starting Git-triggered workflow:", error);
+    }
   }
+});
+
+// Add event handler for Git-triggered workflows
+agentManager.on("gitWorkflowStarted", (info) => {
+  console.log(`Git-triggered workflow started: ${info.sessionId}`);
+
+  // Broadcast to all clients
+  io.emit("gitWorkflowStarted", {
+    sessionId: info.sessionId,
+    timestamp: info.timestamp,
+    message: info.message,
+  });
 });
 
 // Make io accessible to the Express app
@@ -157,6 +177,7 @@ server.listen(PORT, () => {
   console.log(`Environment: ${config.server.nodeEnv}`);
   console.log(`Auth endpoint: ${config.google.redirectUri}`);
   console.log(`Socket.IO initialized`);
+  console.log(`Git monitoring active: ${!!process.env.GIT_REPO_URL}`);
 });
 
 // Cleanup function for temporary files
