@@ -16,6 +16,7 @@ const socketIo = require("socket.io");
 
 // Load configuration
 const config = require("./config/config");
+const gitConfig = require("./config/gitConfig");
 
 // Import routes
 const authRoutes = require("./routes/authRoutes");
@@ -41,6 +42,50 @@ const io = socketIo(server, {
 });
 
 const agentManager = require("./agents/AgentManager");
+
+// Get repository configuration for current session
+const repoConfig = gitConfig.getConfig(this.currentSessionId);
+console.log(`GitAnalysisAgent: Using repo URL ${repoConfig.repoUrl}`);
+
+// Get unique repository path for this session
+this.repoPath = gitConfig.getRepoPath(this.currentSessionId);
+console.log(`GitAnalysisAgent: Using repo path ${this.repoPath}`);
+
+// Start Git monitoring immediately
+console.log("Starting persistent Git monitoring on server startup");
+if (repoConfig.repoUrl) {
+  // Set up persistent monitoring with specific repository details
+  const gitMonitoringOptions = {
+    repoUrl: repoConfig.repoUrl,
+    targetBranch: repoConfig.targetBranch || "main",
+    username: repoConfig.username || "",
+    token: repoConfig.token || "",
+  };
+
+  // Create a monitoring session
+  const monitoringSessionId = `persistent_monitor_${Date.now()}`;
+
+  // Initialize Git agent with the monitoring session
+  const gitAgent = agentManager.getAgent("gitAnalysis");
+  gitAgent.setSession(monitoringSessionId);
+
+  // Connect to repository with provided options
+  gitAgent
+    .connectToRepository(gitMonitoringOptions)
+    .then((connected) => {
+      if (connected) {
+        console.log(
+          `Successfully connected to Git repository: ${repoConfig.repoUrl}`
+        );
+      } else {
+        console.error("Failed to connect to Git repository");
+      }
+    })
+    .catch((error) => {
+      console.error("Error connecting to Git repository:", error);
+    });
+}
+
 // Listen for Git changes
 agentManager.on("gitChangesDetected", async (changeInfo) => {
   console.log("Git changes detected by monitoring:", changeInfo.timestamp);
@@ -177,7 +222,7 @@ server.listen(PORT, () => {
   console.log(`Environment: ${config.server.nodeEnv}`);
   console.log(`Auth endpoint: ${config.google.redirectUri}`);
   console.log(`Socket.IO initialized`);
-  console.log(`Git monitoring active: ${!!process.env.GIT_REPO_URL}`);
+  console.log(`Git monitoring active: ${!!repoConfig.repoUrl}`);
 });
 
 // Cleanup function for temporary files
@@ -225,7 +270,23 @@ setInterval(cleanupTempFiles, 60 * 60 * 1000);
 // Cleanup on exit
 process.on("SIGINT", () => {
   console.log("Shutting down server");
-  process.exit(0);
+
+  // Stop Git monitoring gracefully
+  if (agentManager.gitPollingInterval) {
+    clearInterval(agentManager.gitPollingInterval);
+
+    // Tell Git agent to stop monitoring
+    const gitAgent = agentManager.getAgent("gitAnalysis");
+    if (gitAgent && gitAgent.isMonitoring) {
+      console.log("Stopping Git monitoring before shutdown");
+      gitAgent.stopMonitoring();
+    }
+  }
+
+  setTimeout(() => {
+    console.log("Shutdown complete");
+    process.exit(0);
+  }, 1000);
 });
 
 module.exports = app;

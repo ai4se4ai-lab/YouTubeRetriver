@@ -18,6 +18,48 @@ class OrchestratorAgent extends BaseAgent {
     this.isTerminated = false;
     this.gitMonitoringActive = false;
     this.gitTriggeredOnly = false;
+    this.persistentAgents = new Set(["gitAnalysis"]); // Track agents that should remain active
+  }
+
+  // Add a method to send commands to the GAA
+  async commandGitAnalysisAgent(command, parameters = {}) {
+    try {
+      const gitAgent = require("../dal/GitAnalysisAgent");
+
+      // Ensure the agent is in monitoring mode
+      if (!gitAgent.isMonitoring && command !== "stop") {
+        gitAgent.startMonitoring();
+      }
+
+      switch (command) {
+        case "analyze":
+          console.log("Orchestrator: Commanding GAA to analyze repository");
+          return await gitAgent.analyzeChanges(
+            parameters.sessionId,
+            parameters.options
+          );
+
+        case "check":
+          console.log("Orchestrator: Commanding GAA to check for changes");
+          return await gitAgent.checkForChanges();
+
+        case "reconnect":
+          console.log(
+            "Orchestrator: Commanding GAA to reconnect to repository"
+          );
+          return await gitAgent.connectToRepository(parameters.options);
+
+        case "stop":
+          console.log("Orchestrator: Commanding GAA to stop monitoring");
+          return gitAgent.stopMonitoring();
+
+        default:
+          throw new Error(`Unknown command: ${command}`);
+      }
+    } catch (error) {
+      console.error(`Orchestrator error commanding GAA: ${error.message}`);
+      return { error: error.message };
+    }
   }
 
   /**
@@ -135,6 +177,10 @@ Otherwise, provide a brief status summary and any optimization recommendations.
       isTerminated: this.isTerminated,
       gitMonitoringActive: this.gitMonitoringActive,
       gitTriggeredOnly: this.gitTriggeredOnly,
+      persistentAgents: Array.from(this.persistentAgents),
+      gitAgentStatus: this.agents?.gitAnalysis?.isMonitoring
+        ? "monitoring"
+        : "idle",
     };
 
     return this.process(formattedInput, monitoringPrompt);

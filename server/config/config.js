@@ -55,8 +55,42 @@ const config = {
   agents: {
     openaiApiKey: process.env.OPENAI_API_KEY,
     model: "gpt-4o-mini",
-    gitAnalysisPrompt:
-      "Analyze the Git repository changes to identify potential security vulnerabilities, code quality issues, or other concerns. Focus on extracting significant patterns and providing actionable insights about the code changes.",
+    gitAnalysisPrompt: `You are analyzing Git repository changes in continuous monitoring mode. 
+      Your job is to identify potential IDE integration issues, environmental sustainability concerns, and ethical considerations in the code changes.
+
+      For each detected issue, provide:
+      1. Category (IDE Integration, Environmental Sustainability, or Ethical Consideration)
+      2. A brief description of the issue
+      3. The potential impact
+      4. A suggested improvement
+
+      Your analysis should be continuously available to the Orchestrator agent, which will direct when to perform checks and analyses.
+
+      Focus on these specific areas:
+      1. IDE Integration Issues:
+        - Code constructs that prevent effective IDE features like code navigation, refactoring, etc.
+        - Non-standard formatting that reduces IDE effectiveness
+        - Ambiguous naming or references that confuse IDE tooling
+
+      2. Environmental Sustainability Issues:
+        - Code patterns that could lead to excessive resource consumption
+        - Inefficient algorithms or data structures
+        - Excessive polling or background processes
+        - Potential energy waste
+
+      3. Ethical Considerations:
+        - Privacy concerns (data collection, storage, user tracking)
+        - Transparency issues (hidden functionality, unclear user impacts)
+        - Accessibility problems in UI components
+        - Potential for bias in algorithms or data processing
+
+      Provide clear explanations for each issue identified, including:
+      - The category of the issue (IDE, Environmental, Ethical)
+      - Why it's a concern
+      - Potential impacts
+      - Suggestions for improvement
+
+      Format your analysis as a clear, structured report with separate sections for each category.`,
     contentAnalysisPrompt:
       "Analyze the YouTube data to identify main themes, topics, and potential user interests. Focus on extracting meaningful patterns and insights.",
     knowledgeRetrievalPrompt:

@@ -46,14 +46,14 @@ class BaseAgent {
 
       // Add instruction to summarize output for display to the system prompt
       const enhancedPrompt = `${prompt}
-      
-IMPORTANT: Your response will be shown to the user and also passed to other agents. Please follow these guidelines:
-1. Focus on the most relevant information and insights
-2. Be concise and clear - limit your response to 250 words maximum
-3. Avoid including technical details like token counts, usage statistics, etc.
-4. Structure your response logically with clear sections if appropriate
-5. If you're generating analogies, make them short, interesting, and focused
-6. Remove any metadata or system-related information from your response`;
+
+  IMPORTANT: Your response will be shown to the user and also passed to other agents. Please follow these guidelines:
+  1. Focus on the most relevant information and insights
+  2. Be concise and clear - limit your response to 250 words maximum
+  3. Avoid including technical details like token counts, usage statistics, etc.
+  4. Structure your response logically with clear sections if appropriate
+  5. If you're generating analogies, make them short, interesting, and focused
+  6. Remove any metadata or system-related information from your response`;
 
       const messages = [
         {
@@ -102,6 +102,8 @@ IMPORTANT: Your response will be shown to the user and also passed to other agen
       };
     }
   }
+
+  // Modify the process method to handle continuous monitoring
 
   /**
    * Summarize and clean agent output for display

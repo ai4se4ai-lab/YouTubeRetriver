@@ -27,6 +27,36 @@ class GitAnalysisAgent extends BaseAgent {
     this.lastAnalyzedCommit = null;
     this.isConnected = false;
     this.currentSessionId = null;
+    this.isMonitoring = false; // New property to track monitoring state
+  }
+
+  // Add a startMonitoring method
+  startMonitoring() {
+    this.isMonitoring = true;
+    console.log("GitAnalysisAgent: Started continuous monitoring mode");
+    return this;
+  }
+
+  // Add a stopMonitoring method
+  stopMonitoring() {
+    this.isMonitoring = false;
+    console.log("GitAnalysisAgent: Stopped continuous monitoring mode");
+    return this;
+  }
+
+  // Modify the process method to handle continuous monitoring
+  async process(data, prompt) {
+    const result = await super.process(data, prompt);
+
+    // If in monitoring mode, reset the processed flag to remain active
+    if (this.isMonitoring) {
+      this.processed = false;
+      console.log(
+        "GitAnalysisAgent: Resetting to active state for continuous monitoring"
+      );
+    }
+
+    return result;
   }
 
   /**
@@ -510,6 +540,60 @@ class GitAnalysisAgent extends BaseAgent {
       },
     ];
 
+    const environmentalPatterns = [
+      {
+        regex: /[\s\S]*?while\s*\(\s*true\s*\)[\s\S]*?/i,
+        severity: "medium",
+        category: "environmental",
+        message:
+          "Infinite loop detected - may cause excessive CPU usage and energy consumption",
+      },
+      {
+        regex: /setTimeout\s*\(\s*[\s\S]*?,\s*[0-9]+\s*\)/i,
+        severity: "low",
+        category: "environmental",
+        message:
+          "Short polling intervals may increase server load and energy consumption",
+      },
+      // More environmental patterns
+    ];
+
+    const ideIntegrationPatterns = [
+      {
+        regex: /\/\/\s*TODO\s*:/i,
+        severity: "low",
+        category: "ide",
+        message:
+          "TODO comment without IDE-friendly formatting - consider using @TODO tag for better IDE integration",
+      },
+      {
+        regex: /import\s+\*\s+from/i,
+        severity: "medium",
+        category: "ide",
+        message:
+          "Wildcard imports reduce IDE code navigation and autocompletion effectiveness",
+      },
+      // More IDE patterns
+    ];
+
+    const ethicalPatterns = [
+      {
+        regex: /password|user|email|personal|private/i,
+        severity: "high",
+        category: "ethical",
+        message:
+          "Potential privacy concern: Check for proper data handling and consent",
+      },
+      {
+        regex: /tracking|analytics|monitor/i,
+        severity: "medium",
+        category: "ethical",
+        message:
+          "User tracking detected - ensure transparent disclosure and opt-out options",
+      },
+      // More ethical patterns
+    ];
+
     // Add language-specific patterns based on file extension
     if (
       fileName.endsWith(".js") ||
@@ -526,7 +610,10 @@ class GitAnalysisAgent extends BaseAgent {
           regex: /document\.write\s*\(/i,
           severity: "medium",
           message: "Potential XSS vulnerability with document.write",
-        }
+        },
+        ...environmentalPatterns,
+        ...ideIntegrationPatterns,
+        ...ethicalPatterns
       );
     } else if (fileName.endsWith(".py")) {
       patterns.push(
@@ -539,7 +626,10 @@ class GitAnalysisAgent extends BaseAgent {
           regex: /\.system\s*\(/i,
           severity: "medium",
           message: "Potential command injection with system call",
-        }
+        },
+        ...environmentalPatterns,
+        ...ideIntegrationPatterns,
+        ...ethicalPatterns
       );
     }
 
@@ -587,7 +677,17 @@ class GitAnalysisAgent extends BaseAgent {
       console.log("GitAnalysisAgent: Extracting context around issues");
       const issuesWithContext = [];
 
+      // Categorize issues by type
+      const categorizedIssues = {
+        security: [],
+        environmental: [],
+        ide: [],
+        ethical: [],
+      };
+
       for (const issue of securityResults.securityIssues) {
+        const category = issue.category || "security";
+
         const filePath = path.join(this.repoPath, issue.file);
 
         if (fs.existsSync(filePath)) {
@@ -629,10 +729,25 @@ class GitAnalysisAgent extends BaseAgent {
           // File not found, just add the issue without context
           issuesWithContext.push(issue);
         }
+
+        if (categorizedIssues[category]) {
+          categorizedIssues[category].push({
+            ...issue,
+            context: contextLines,
+            changeInfo,
+          });
+        } else {
+          // Fallback to security category
+          categorizedIssues.security.push({
+            ...issue,
+            context: contextLines,
+            changeInfo,
+          });
+        }
       }
 
       return {
-        issuesWithContext,
+        issuesByCategory: categorizedIssues,
         totalIssues: securityResults.securityIssues.length,
         issuesBySeverity: {
           high: securityResults.securityIssues.filter(
@@ -648,7 +763,6 @@ class GitAnalysisAgent extends BaseAgent {
       };
     } catch (error) {
       console.error("Error extracting context:", error);
-      this.error = error.message;
       return { error: error.message };
     }
   }
@@ -660,6 +774,7 @@ class GitAnalysisAgent extends BaseAgent {
    * @returns {Promise<Object>} Analysis results
    */
   async analyzeChanges(sessionId, options = {}) {
+    const wasMonitoring = this.isMonitoring;
     try {
       console.log("GitAnalysisAgent: Starting analysis...");
 
@@ -740,11 +855,29 @@ class GitAnalysisAgent extends BaseAgent {
         analysisTimestamp: new Date().toISOString(),
       };
 
+      const result = await super.process(analysisResults, this.prompt);
+
+      // If we were in monitoring mode, restore it after processing
+      if (wasMonitoring) {
+        this.processed = false;
+        this.isMonitoring = true;
+        console.log(
+          "GitAnalysisAgent: Returning to monitoring state after analysis"
+        );
+      }
+
+      return result;
+
       // Process through LLM for analysis
-      return this.process(analysisResults, this.prompt);
+      //return this.process(analysisResults, this.prompt);
     } catch (error) {
       console.error("GitAnalysisAgent: Error analyzing changes:", error);
       this.error = error.message;
+
+      if (wasMonitoring) {
+        this.isMonitoring = true;
+        this.processed = false;
+      }
 
       // Return an error result
       return {

@@ -5,6 +5,7 @@
  */
 const EventEmitter = require("events");
 const config = require("../config/config");
+const gitConfig = require("../config/gitConfig");
 
 // Import all agents
 const contentAnalysisAgent = require("./dal/ContentAnalysisAgent");
@@ -17,6 +18,14 @@ const explanationAgent = require("./rpl/ExplanationAgent");
 const userFeedbackAgent = require("./fll/UserFeedbackAgent");
 const learningAgent = require("./fll/LearningAgent");
 const orchestratorAgent = require("./ccl/OrchestratorAgent");
+
+// Get repository configuration for current session
+const repoConfig = gitConfig.getConfig(this.currentSessionId);
+console.log(`GitAnalysisAgent: Using repo URL ${repoConfig.repoUrl}`);
+
+// Get unique repository path for this session
+this.repoPath = gitConfig.getRepoPath(this.currentSessionId);
+console.log(`GitAnalysisAgent: Using repo path ${this.repoPath}`);
 
 class AgentManager extends EventEmitter {
   constructor() {
@@ -50,53 +59,84 @@ class AgentManager extends EventEmitter {
    * Start default Git repository monitoring
    */
   startDefaultGitMonitoring() {
-    if (process.env.GIT_REPO_URL) {
-      console.log(
-        "Starting default Git repository monitoring " + process.env.GIT_REPO_URL
-      );
+    if (repoConfig.repoUrl) {
+      console.log("Starting persistent Git repository monitoring");
 
-      // Start polling at a shorter interval (30 seconds)
+      // First, set up the Git agent for continuous monitoring
+      const gitAgent = this.agents.gitAnalysis;
+      gitAgent.startMonitoring();
+
+      // Create a dedicated session for background monitoring
+      const monitoringSessionId = `persistent_monitor_${Date.now()}`;
+      gitAgent.setSession(monitoringSessionId);
+
+      // Connect to the repository
+      gitAgent
+        .connectToRepository({
+          repoUrl: gitAnalysisAgent.git,
+          targetBranch: gitConfig.targetBranch || "main",
+          username: gitConfig.username || "",
+          token: gitConfig.token || "",
+        })
+        .then((connected) => {
+          if (!connected) {
+            console.error(
+              "Failed to establish initial connection to Git repository"
+            );
+          }
+        });
+
+      // Use the orchestrator to manage the Git agent
+      const orchestrator = this.agents.orchestrator;
+
+      // Poll using the orchestrator to command the Git agent
       this.gitPollingInterval = setInterval(async () => {
         try {
-          console.log(
-            "Default polling: Checking Git repository for changes " +
-              process.env.GIT_REPO_URL
+          // Have orchestrator command Git agent to check for changes
+          const changeData = await orchestrator.commandGitAnalysisAgent(
+            "check"
           );
-
-          const gitAgent = this.agents.gitAnalysis;
-
-          // Connect if not already connected
-          if (!gitAgent.isConnected) {
-            await gitAgent.connectToRepository();
-          }
-
-          // Check for changes
-          const changeData = await gitAgent.checkForChanges();
 
           if (changeData.hasChanges) {
             console.log("Default polling: Git changes detected!");
 
-            // Emit an event that can be listened for by the server
+            // Emit an event for clients
             this.emit("gitChangesDetected", {
               changeData,
               timestamp: new Date().toISOString(),
-              automatic: true, // Flag to indicate this was from automatic monitoring
+              automatic: true,
             });
 
-            // Start a new workflow triggered by Git changes
-            // Only if not already in an active workflow
-            if (!this.activeSession || this.currentState.completed) {
-              await this.processGitChanges(changeData);
-            } else {
-              console.log(
-                "Active workflow in progress, not starting Git-triggered workflow"
-              );
-            }
+            // Have orchestrator command Git agent to analyze changes
+            await orchestrator.commandGitAnalysisAgent("analyze", {
+              sessionId: monitoringSessionId,
+              options: {
+                repoUrl: repoConfig.repoUrl,
+                targetBranch: repoConfig.targetBranch || "main",
+              },
+            });
           }
         } catch (error) {
-          console.error("Error in default Git monitoring:", error);
+          console.error("Error in Git monitoring:", error);
+
+          // Try to reconnect after error using orchestrator
+          setTimeout(async () => {
+            try {
+              await orchestrator.commandGitAnalysisAgent("reconnect", {
+                options: {
+                  repoUrl: repoConfig.repoUrl,
+                  targetBranch: repoConfig.targetBranch || "main",
+                },
+              });
+            } catch (reconnectError) {
+              console.error(
+                "Failed to reconnect to Git repository:",
+                reconnectError
+              );
+            }
+          }, 60000);
         }
-      }, 30000); // Check every 30 seconds
+      }, 30000);
     }
   }
 
