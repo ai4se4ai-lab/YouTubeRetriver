@@ -226,11 +226,11 @@ class AgentManager extends EventEmitter {
       });
 
       // Run the workflow with Git-triggered flag
+      // Run the workflow with Git-triggered flag
       await this.runFullWorkflow(
-        {}, // No YouTube data needed for Git-triggered workflow
+        { gitAnalysisData: changeData }, // Pass Git data here instead of empty object
         async (step, result) => {
           // Auto-approve steps for background processing
-          // You could modify this to still require approvals for certain steps
           console.log(`Auto-approving step ${step} for Git-triggered workflow`);
           return result;
         },
@@ -493,20 +493,27 @@ class AgentManager extends EventEmitter {
           });
 
           // Make sure any necessary data is being passed from Git Analysis to Content Analysis
-          // For example:
           const contentAnalysisData = {
-            // Include any relevant data from gitAnalysisResult
+            // Include relevant data from gitAnalysisResult
             gitFindings:
               gitAnalysisResult?.result?.output || "No Git findings available",
+            // If we have direct Git data from a triggered workflow, include it
+            gitChangesData: youtubeData.gitAnalysisData || null,
           };
 
-          // Ensure there's sufficient YouTube data for the Content Analysis agent
-          if (
-            !youtubeData ||
-            (!youtubeData.likedVideos && !youtubeData.watchHistory)
-          ) {
-            console.warn("No YouTube data available for Content Analysis");
-            // Consider using sample data or skipping to Analogy Generation
+          // Update youtubeData to include Git findings if not already present
+          if (!youtubeData.gitFindings && gitAnalysisResult?.result?.output) {
+            youtubeData.gitFindings = gitAnalysisResult.result.output;
+          }
+
+          // Ensure there's sufficient data for Content Analysis
+          if (!youtubeData.likedVideos && !youtubeData.watchHistory) {
+            console.warn(
+              "No YouTube data available, using Git analysis data instead"
+            );
+            // Create sample data structure if needed
+            youtubeData.likedVideos = [];
+            youtubeData.watchHistory = [];
           }
         }
       }

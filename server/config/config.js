@@ -67,10 +67,16 @@ const config = {
       Your analysis should be continuously available to the Orchestrator agent, which will direct when to perform checks and analyses.
 
       Focus on these specific areas:
-      1. IDE Integration Issues:
-        - Code constructs that prevent effective IDE features like code navigation, refactoring, etc.
-        - Non-standard formatting that reduces IDE effectiveness
-        - Ambiguous naming or references that confuse IDE tooling
+      1. Detecting issues related to inclusion, diversity, and equity:
+        - Potentially Harmful or Biased Language: Look for variable names, comments, or user-facing strings that might perpetuate stereotypes, use exclusionary language, or make assumptions about user identity (e.g., gendered pronouns when referring to a generic user, terms that could be offensive to certain groups)
+        - Lack of Localization/Internationalization (i18n): If the software is intended for a global audience, the absence of i18n considerations (e.g., hardcoded strings, lack of support for different date/time formats, currency symbols, or right-to-left languages) can indicate a lack of inclusivity for non-English speakers.
+        - Limited Input Options: Code that makes assumptions about user identity or characteristics by offering a limited set of options (e.g., only "Male" and "Female" gender choices) can be exclusionary and not reflect the diversity of users.
+        - Lack of Robust Error Handling for Diverse Inputs: Insufficient error handling for unexpected or varied inputs might disproportionately affect users with different data formats or input methods.
+        - Hardcoded or Default Values Reflecting Bias: Check for default values or hardcoded data that might reflect societal biases (e.g., assuming a certain profession is predominantly one gender).
+        - Lack of Anonymization or Privacy Considerations: Code that doesn't properly handle sensitive user data, especially demographic information, can disproportionately affect marginalized groups who might be more vulnerable to privacy breaches.
+        - Accessibility Considerations, Missing or Poor Semantic HTML: In web development, the lack of semantic HTML elements (e.g., <nav>, <article>, <aside>) and proper use of ARIA attributes can create barriers for users with assistive technologies like screen readers.
+        - Accessibility Considerations, Insufficient Color Contrast: Inadequate color contrast between text and background can make content difficult to read for users with low vision.
+        - Accessibility Considerations, Lack of Keyboard Navigation: Code that doesn't support keyboard navigation can exclude users with mobility impairments who rely on keyboard shortcuts or assistive devices.
 
       2. Environmental Sustainability Issues:
         - Code patterns that could lead to excessive resource consumption
@@ -90,13 +96,13 @@ const config = {
       - Potential impacts
       - Suggestions for improvement
 
-      Format your analysis as a clear, structured report with separate sections for each category.`,
+      Format your analysis as a consise, structured report with separate sections for each category.`,
     contentAnalysisPrompt:
       "Analyze the YouTube data to identify main themes, topics, and potential user interests. Focus on extracting meaningful patterns and insights.",
     knowledgeRetrievalPrompt:
       "Based on the identified topics, retrieve and summarize relevant factual information that could enhance understanding. Focus on high-quality, accurate information.",
     analogyGenerationPrompt:
-      "Create meaningful analogies that connect the user's interests from their YouTube data to concepts in humanities, science, ethics, or other domains. Make these analogies educational and insightful.",
+      "Create meaningful analogies that connect the user's interests from their YouTube data to concepts in humanities, science, ethics, or other domains. If Git analysis results are available, prioritize creating analogies that help explain the code issues, technical concepts, and best practices identified by the Git Analysis Agent. Make these analogies educational and insightful.",
     analogyValidationPrompt:
       "Evaluate the proposed analogy for accuracy, relevance, educational value, and clarity. Provide specific feedback on strengths and areas for improvement.",
     analogyRefinementPrompt:

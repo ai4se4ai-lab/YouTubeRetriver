@@ -33,6 +33,7 @@ class ContentAnalysisAgent extends BaseAgent {
     const formattedData = {
       likedVideos: [],
       watchHistory: [],
+      gitFindings: rawData.gitFindings || null,
     };
 
     if (rawData.likedVideos && Array.isArray(rawData.likedVideos)) {

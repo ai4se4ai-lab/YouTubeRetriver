@@ -38,9 +38,12 @@ class AnalogyGenerationAgent extends BaseAgent {
       knowledgeContext:
         input.knowledgeRetrieval?.result?.output ||
         "No knowledge context available",
+      gitAnalysis:
+        input.gitAnalysis?.result?.output || "No Git analysis available",
       sourceAgents: [
         input.contentAnalysis?.name || "Unknown",
         input.knowledgeRetrieval?.name || "Unknown",
+        input.gitAnalysis?.name || "Unknown",
       ],
       timestamp: new Date().toISOString(),
     };

@@ -560,18 +560,82 @@ class GitAnalysisAgent extends BaseAgent {
 
     const ideIntegrationPatterns = [
       {
-        regex: /\/\/\s*TODO\s*:/i,
-        severity: "low",
-        category: "ide",
-        message:
-          "TODO comment without IDE-friendly formatting - consider using @TODO tag for better IDE integration",
-      },
-      {
-        regex: /import\s+\*\s+from/i,
+        regex: /\b(he|his|him|she|her|hers)\b/i,
         severity: "medium",
         category: "ide",
         message:
-          "Wildcard imports reduce IDE code navigation and autocompletion effectiveness",
+          "Potentially gendered language in code or comments - consider using gender-neutral terms for inclusive code",
+      },
+      {
+        regex: /\b(blacklist|whitelist|master|slave)\b/i,
+        severity: "medium",
+        category: "ide",
+        message:
+          "Potentially exclusionary terminology - consider using more inclusive alternatives (allowlist/denylist, primary/secondary)",
+      },
+      {
+        regex: /\bgender\s*[=:]\s*['"][mf]ale['"]/i,
+        severity: "high",
+        category: "ide",
+        message:
+          "Limited gender options may be exclusionary - consider inclusive approaches to gender data collection",
+      },
+      {
+        regex:
+          /<select[^>]*>\s*<option[^>]*>Male<\/option>\s*<option[^>]*>Female<\/option>/i,
+        severity: "high",
+        category: "ide",
+        message:
+          "Binary gender selection UI element detected - consider more inclusive options",
+      },
+      {
+        regex: /hardcoded.*?(language|locale|region|country)/i,
+        severity: "medium",
+        category: "ide",
+        message:
+          "Potential internationalization issue - hardcoded locale assumptions may not work for all users",
+      },
+      {
+        regex: /aria-[a-z]+=|role=|tabindex=/i,
+        severity: "low",
+        category: "ide",
+        message:
+          "Accessibility attributes found - verify they're used correctly for assistive technology compatibility",
+      },
+      {
+        regex: /<div[^>]*onClick/i,
+        severity: "medium",
+        category: "ide",
+        message:
+          "Potential keyboard accessibility issue - non-interactive elements with click handlers may not be keyboard accessible",
+      },
+      {
+        regex: /contrast|color|background/i,
+        severity: "low",
+        category: "ide",
+        message:
+          "Check color contrast for accessibility compliance - ensure text is readable for users with low vision",
+      },
+      {
+        regex: /throw\s+new\s+Error\(['"][^'"]*['"]\)/i,
+        severity: "low",
+        category: "ide",
+        message:
+          "Basic error handling detected - ensure errors are handled inclusively with clear, helpful messages for all users",
+      },
+      {
+        regex: /firstName|lastName|fullName/i,
+        severity: "low",
+        category: "ide",
+        message:
+          "Name fields detected - ensure name handling accommodates diverse naming conventions across cultures",
+      },
+      {
+        regex: /\bdefault\s+avatar\b|\bdefault\s+profile\b/i,
+        severity: "medium",
+        category: "ide",
+        message:
+          "Default user representation - ensure default avatars/profiles are diverse and inclusive",
       },
       // More IDE patterns
     ];
