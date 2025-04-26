@@ -209,21 +209,43 @@ document.addEventListener("DOMContentLoaded", () => {
   function handleStateUpdate(update) {
     console.log("State update received:", update);
 
-    // Update agent status
-    if (update.agent && agentSystem.agents[update.agent]) {
-      agentSystem.agents[update.agent].status = update.result.processed
-        ? "completed"
-        : "error";
+    // Special handling for Git Analysis Agent in monitoring mode
+    if (update.agent === "gitAnalysis" && update.isMonitoring) {
+      agentSystem.agents[update.agent].status = "processing"; // Keep in processing state
       agentSystem.agents[update.agent].result = update.result;
 
-      // If this was the pending approval, clear it
-      if (agentSystem.workflow.pendingApproval === update.agent) {
-        agentSystem.workflow.pendingApproval = null;
-      }
+      // Update UI to show it's actively monitoring
+      const gitCard = document.getElementById("gitAnalysis-card");
+      if (gitCard) {
+        gitCard.classList.remove("completed", "error", "idle");
+        gitCard.classList.add("processing");
 
-      // Special handling for orchestrator
-      if (update.agent.includes("orchestrator")) {
-        updateOrchestratorStatus("active");
+        const statusElement = gitCard.querySelector(".agent-status");
+        if (statusElement) {
+          statusElement.textContent = "Monitoring";
+          statusElement.className = statusElement.className
+            .replace(/idle|processing|completed|error|waiting/g, "")
+            .trim();
+          statusElement.classList.add("processing");
+        }
+      }
+    } else {
+      // Regular update handling for other agents
+      if (update.agent && agentSystem.agents[update.agent]) {
+        agentSystem.agents[update.agent].status = update.result.processed
+          ? "completed"
+          : "error";
+        agentSystem.agents[update.agent].result = update.result;
+
+        // If this was the pending approval, clear it
+        if (agentSystem.workflow.pendingApproval === update.agent) {
+          agentSystem.workflow.pendingApproval = null;
+        }
+
+        // Special handling for orchestrator
+        if (update.agent.includes("orchestrator")) {
+          updateOrchestratorStatus("active");
+        }
       }
     }
 

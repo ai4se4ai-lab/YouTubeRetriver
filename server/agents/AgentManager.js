@@ -324,22 +324,46 @@ class AgentManager extends EventEmitter {
    * @param {Object} result - Processing result
    */
   updateState(agentName, result) {
-    this.processingHistory.push(result);
+    // Special handling for Git Analysis Agent in monitoring mode
+    if (agentName === "gitAnalysis" && this.agents.gitAnalysis.isMonitoring) {
+      // Clone result but override processed state
+      const monitoringResult = { ...result, processed: false };
+      this.processingHistory.push(monitoringResult);
 
-    this.currentState.steps.push({
-      agentName,
-      timestamp: Date.now(),
-      duration: result.duration,
-      success: result.processed,
-      hasError: !!result.error,
-    });
+      this.currentState.steps.push({
+        agentName,
+        timestamp: Date.now(),
+        duration: result.duration,
+        success: true, // Always consider successful in monitoring mode
+        hasError: !!result.error,
+        isMonitoring: true,
+      });
 
-    // Emit update event
-    this.emit("stateUpdate", {
-      agent: agentName,
-      result: result,
-      state: this.currentState,
-    });
+      // Emit update event with monitoring state
+      this.emit("stateUpdate", {
+        agent: agentName,
+        result: monitoringResult,
+        state: this.currentState,
+        isMonitoring: true,
+      });
+    } else {
+      this.processingHistory.push(result);
+
+      this.currentState.steps.push({
+        agentName,
+        timestamp: Date.now(),
+        duration: result.duration,
+        success: result.processed,
+        hasError: !!result.error,
+      });
+
+      // Emit update event
+      this.emit("stateUpdate", {
+        agent: agentName,
+        result: result,
+        state: this.currentState,
+      });
+    }
   }
 
   // Monitor interval for the orchestrator
