@@ -152,47 +152,39 @@ class GitAnalysisAgent extends BaseAgent {
       console.log(`GitAnalysisAgent: Is already a repo: ${isRepo}`);
 
       if (!isRepo) {
-        // Clone repo
+        // First-time initialization - Clone repo
         console.log(`GitAnalysisAgent: Cloning repository to ${this.repoPath}`);
         await this.git.clone(formattedRepoUrl, this.repoPath);
         console.log(`GitAnalysisAgent: Repository cloned to ${this.repoPath}`);
 
-        // Checkout the target branch
+        // Checkout the target branch but don't pull yet
         await this.git.checkout(repoConfig.targetBranch);
         console.log(
           `GitAnalysisAgent: Checked out branch ${repoConfig.targetBranch}`
         );
-      } else {
-        // Handle existing repository
-        console.log("GitAnalysisAgent: Repository already exists, updating");
 
-        // First, reset any changes to avoid conflicts
+        // Get latest commit hash to track changes
+        const latestCommit = await this.git.revparse(["HEAD"]);
+        console.log(`GitAnalysisAgent: Latest commit is ${latestCommit}`);
+        // Initial state - don't store this yet as lastAnalyzedCommit
+        // We'll use checkForChanges to establish the baseline
+      } else {
+        // Repository exists - just initialize connection without pulling
+        console.log("GitAnalysisAgent: Repository already exists");
+
+        // Reset any uncommitted changes to avoid conflicts
+        // But DO NOT pull latest yet - that will happen in checkForChanges
         await this.git.reset(["--hard"]);
         console.log("GitAnalysisAgent: Reset any local changes");
 
-        // Then fetch latest changes
-        await this.git.fetch("origin");
-        console.log("GitAnalysisAgent: Fetched latest changes");
-
-        // Checkout the target branch
+        // Make sure we're on the right branch
         await this.git.checkout(repoConfig.targetBranch);
         console.log(
           `GitAnalysisAgent: Checked out branch ${repoConfig.targetBranch}`
         );
-
-        // Pull the latest changes
-        await this.git.pull("origin", repoConfig.targetBranch);
-        console.log(
-          `GitAnalysisAgent: Pulled latest changes from ${repoConfig.targetBranch}`
-        );
       }
 
-      // Get latest commit hash to track changes
-      const latestCommit = await this.git.revparse(["HEAD"]);
-      console.log(`GitAnalysisAgent: Latest commit is ${latestCommit}`);
-      this.lastAnalyzedCommit = latestCommit;
       this.isConnected = true;
-
       console.log("GitAnalysisAgent: Successfully connected to repository");
       return true;
     } catch (error) {
@@ -207,7 +199,9 @@ class GitAnalysisAgent extends BaseAgent {
    * Check for new commits or pull requests on the target branch
    * @returns {Promise<Object>} New commit data if available
    */
-  async checkForChanges() {
+  // In GitAnalysisAgent.js, modify the checkForChanges method:
+
+  async checkForChanges(isFirstAnalysis = false) {
     if (!this.isConnected) {
       console.log("GitAnalysisAgent: Not connected, connecting first");
       await this.connectToRepository();
@@ -221,39 +215,135 @@ class GitAnalysisAgent extends BaseAgent {
         `GitAnalysisAgent: Checking for changes on branch ${targetBranch}`
       );
 
+      // Get current HEAD before pulling
+      const currentHead = await this.git.revparse(["HEAD"]);
+      console.log(
+        `GitAnalysisAgent: Current HEAD before pull is ${currentHead}`
+      );
+
+      // Fetch from remote to see if there are updates
+      await this.git.fetch("origin");
+      console.log("GitAnalysisAgent: Fetched latest changes");
+
+      // Get the remote branch latest commit
+      let remoteCommit;
+      try {
+        remoteCommit = await this.git.revparse(["origin/" + targetBranch]);
+        console.log(`GitAnalysisAgent: Remote HEAD is ${remoteCommit}`);
+      } catch (err) {
+        console.log("Could not get remote HEAD, using local HEAD");
+        remoteCommit = currentHead;
+      }
+
+      // Check if there are changes between local and remote
+      const hasRemoteChanges = currentHead !== remoteCommit;
+
       // Pull latest changes for the target branch
       await this.git.checkout(targetBranch);
       await this.git.pull("origin", targetBranch);
       console.log("GitAnalysisAgent: Pulled latest changes");
 
-      // Get latest commit
+      // Get HEAD after pulling
       const latestCommit = await this.git.revparse(["HEAD"]);
-      console.log(`GitAnalysisAgent: Current HEAD is ${latestCommit}`);
+      console.log(
+        `GitAnalysisAgent: Current HEAD after pull is ${latestCommit}`
+      );
 
-      // If no previous commit or new commits are available
-      if (
-        !this.lastAnalyzedCommit ||
-        latestCommit !== this.lastAnalyzedCommit
-      ) {
+      // For first analysis or if the repo was updated
+      if (isFirstAnalysis || hasRemoteChanges || currentHead !== latestCommit) {
         console.log(
-          `GitAnalysisAgent: New commits found since ${
-            this.lastAnalyzedCommit || "initial check"
-          }`
+          `GitAnalysisAgent: Changes detected (First analysis: ${isFirstAnalysis}, Remote changes: ${hasRemoteChanges}, Local update: ${
+            currentHead !== latestCommit
+          })`
         );
 
-        // Get commit range to analyze
-        const commitRange = this.lastAnalyzedCommit
-          ? `${this.lastAnalyzedCommit}..${latestCommit}`
-          : latestCommit;
+        // Get all files in the repository for the first analysis
+        let changedFiles = [];
+        let changedFilesCount = 0;
+        let commitLog = { all: [] };
+        let commitRange = "";
 
-        // Get commit details
-        const commitLog = await this.git.log({
-          from: this.lastAnalyzedCommit || "",
-          to: latestCommit,
-        });
-        console.log(
-          `GitAnalysisAgent: Found ${commitLog.all.length} new commits`
-        );
+        // Inside the checkForChanges method:
+        if (isFirstAnalysis) {
+          // For first analysis, analyze the whole repository
+          console.log("GitAnalysisAgent: First analysis - scanning all files");
+
+          // Get a list of all tracked files in the repository
+          // Fix the ls-files command to correctly return the output
+          try {
+            const result = await this.git.raw(["ls-files"]);
+            // Check if result is a string before splitting
+            const allFiles =
+              result && typeof result === "string"
+                ? result
+                    .split("\n")
+                    .filter((f) => f.trim())
+                    .map((file) => ({
+                      file,
+                      changes: 1,
+                      insertions: 1,
+                      deletions: 0,
+                    }))
+                : [];
+
+            changedFiles = allFiles;
+            changedFilesCount = allFiles.length;
+          } catch (err) {
+            console.log("Error getting tracked files, using fallback approach");
+            // Fallback approach - get all files in the working directory
+            try {
+              // Use git status to get all tracked files
+              const status = await this.git.status();
+              const allFiles = [
+                ...status.files.map((file) => ({
+                  file: file.path,
+                  changes: 1,
+                  insertions: 1,
+                  deletions: 0,
+                })),
+              ];
+              changedFiles = allFiles;
+              changedFilesCount = allFiles.length;
+            } catch (fallbackErr) {
+              console.error("Fallback approach also failed:", fallbackErr);
+              changedFiles = [];
+              changedFilesCount = 0;
+            }
+          }
+
+          // Get recent commit history
+          commitLog = await this.git.log(["-n", "5"]);
+          commitRange =
+            commitLog.all.length > 0 ? commitLog.all[0].hash : latestCommit;
+
+          console.log(
+            `GitAnalysisAgent: Found ${changedFilesCount} files to analyze in first run`
+          );
+        } else {
+          // For subsequent runs, analyze only changes
+          if (hasRemoteChanges) {
+            commitRange = `${currentHead}..${remoteCommit}`;
+          } else {
+            commitRange = `${this.lastAnalyzedCommit}..${latestCommit}`;
+          }
+
+          console.log(`GitAnalysisAgent: Using commit range: ${commitRange}`);
+
+          // Get commit details
+          commitLog = await this.git.log({
+            from: this.lastAnalyzedCommit || currentHead,
+            to: latestCommit,
+          });
+
+          // Get diff summary
+          const diffSummary = await this.git.diffSummary([commitRange]);
+          changedFiles = diffSummary.files;
+          changedFilesCount = diffSummary.files.length;
+
+          console.log(
+            `GitAnalysisAgent: Found ${changedFilesCount} changed files`
+          );
+        }
 
         // Update last analyzed commit
         this.lastAnalyzedCommit = latestCommit;
@@ -263,6 +353,9 @@ class GitAnalysisAgent extends BaseAgent {
           commits: commitLog.all,
           commitRange,
           currentBranch: targetBranch,
+          changedFiles,
+          changedFilesCount,
+          isFirstAnalysis,
         };
       }
 
@@ -275,12 +368,10 @@ class GitAnalysisAgent extends BaseAgent {
       console.error("Error checking for changes:", error);
       this.error = error.message;
 
-      // Even in case of error, return a valid result object so the workflow can continue
       return {
         hasChanges: false,
         error: error.message,
         errorObject: error,
-        // Try to determine current branch even on error
         currentBranch: await this.git
           .revparse(["--abbrev-ref", "HEAD"])
           .catch(() => "unknown"),
@@ -751,6 +842,8 @@ class GitAnalysisAgent extends BaseAgent {
 
       for (const issue of securityResults.securityIssues) {
         const category = issue.category || "security";
+        // Initialize contextLines here to avoid the reference error
+        let contextLines = [];
 
         const filePath = path.join(this.repoPath, issue.file);
 
@@ -763,7 +856,6 @@ class GitAnalysisAgent extends BaseAgent {
           const startLine = Math.max(0, issue.line - 6);
           const endLine = Math.min(lines.length - 1, issue.line + 4);
 
-          const contextLines = [];
           for (let i = startLine; i <= endLine; i++) {
             contextLines.push({
               lineNumber: i + 1,
@@ -791,21 +883,38 @@ class GitAnalysisAgent extends BaseAgent {
           });
         } else {
           // File not found, just add the issue without context
-          issuesWithContext.push(issue);
+          issuesWithContext.push({
+            ...issue,
+            context: [], // Empty context array for missing files
+            changeInfo: { insertions: 0, deletions: 0, changes: 0 },
+          });
         }
 
+        // Use the proper contextLines variable inside the loop
         if (categorizedIssues[category]) {
           categorizedIssues[category].push({
             ...issue,
             context: contextLines,
-            changeInfo,
+            changeInfo: fileChange
+              ? {
+                  insertions: fileChange.insertions,
+                  deletions: fileChange.deletions,
+                  changes: fileChange.changes,
+                }
+              : { insertions: 0, deletions: 0, changes: 0 },
           });
         } else {
           // Fallback to security category
           categorizedIssues.security.push({
             ...issue,
             context: contextLines,
-            changeInfo,
+            changeInfo: fileChange
+              ? {
+                  insertions: fileChange.insertions,
+                  deletions: fileChange.deletions,
+                  changes: fileChange.changes,
+                }
+              : { insertions: 0, deletions: 0, changes: 0 },
           });
         }
       }
@@ -866,9 +975,13 @@ class GitAnalysisAgent extends BaseAgent {
         }
       }
 
+      // ALWAYS force a check for changes by setting the lastAnalyzedCommit to null
+      // for the first run of analyzeChanges
+      const isFirstAnalysis = !this.lastAnalyzedCommit;
+
       // Check for new changes
       console.log("GitAnalysisAgent: Checking for changes...");
-      const changeData = await this.checkForChanges();
+      const changeData = await this.checkForChanges(isFirstAnalysis);
       console.log("GitAnalysisAgent: Change data:", changeData);
 
       // No changes or error
@@ -884,8 +997,25 @@ class GitAnalysisAgent extends BaseAgent {
         });
       }
 
-      // Get diff data
-      const diffData = await this.getCommitDiff(changeData.commitRange);
+      let diffData;
+      if (changeData.changedFiles && changeData.changedFilesCount > 0) {
+        // Use pre-processed diff data from checkForChanges
+        diffData = {
+          changedFiles: changeData.changedFiles,
+          insertions: changeData.insertions || 0,
+          deletions: changeData.deletions || 0,
+          changedFilesCount: changeData.changedFilesCount,
+        };
+        console.log(
+          `GitAnalysisAgent: Using preprocessed diff data with ${diffData.changedFilesCount} files`
+        );
+      } else {
+        // Get diff data the traditional way
+        diffData = await this.getCommitDiff(changeData.commitRange);
+        console.log(
+          `GitAnalysisAgent: Retrieved diff data with ${diffData.changedFilesCount} files`
+        );
+      }
 
       if (diffData.error) {
         throw new Error(`Error getting diff: ${diffData.error}`);

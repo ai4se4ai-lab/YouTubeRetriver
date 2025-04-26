@@ -98,10 +98,11 @@ class AgentManager extends EventEmitter {
           // Check for changes if connected
           if (gitAgent.isConnected) {
             return await gitAgent.checkForChanges();
+          } else {
+            // Try to connect if not
+            await gitAgent.connectToRepository();
+            return { hasChanges: false };
           }
-          // Try to connect if not
-          await gitAgent.connectToRepository();
-          return { hasChanges: false };
         },
         (eventName, data) => this.emit(eventName, data),
         60000 // 60 seconds interval
