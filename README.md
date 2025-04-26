@@ -7,6 +7,7 @@ A web application that allows users to export their YouTube liked videos and wat
 - **Secure Authentication**: Uses OAuth 2.0 to securely access YouTube data with minimal permissions
 - **Data Export**: Export your liked videos and watch history to CSV files
 - **AI Analysis**: Analyze your YouTube data with intelligent AI agents for personalized insights
+- **Git Integration**: Analyze Git repositories for code quality, inclusivity, and sustainability issues
 - **Interactive Visualization**: See how the AI agents work together in real-time
 - **User Feedback**: Provide feedback to improve AI analysis quality
 - **User-Friendly Interface**: Simple, responsive UI for both data export and AI analysis
@@ -20,6 +21,7 @@ A web application that allows users to export their YouTube liked videos and wat
 - **APIs**: YouTube Data API v3, OpenAI API
 - **Data Format**: CSV export using json2csv
 - **Real-time Communication**: Socket.IO
+- **Version Control**: Git (for repository analysis)
 
 ## Project Structure
 
@@ -36,22 +38,48 @@ youtube-data-exporter/
 │   │   ├── app.js          # Main application logic
 │   │   ├── auth.js         # Authentication handling
 │   │   ├── dataHandler.js  # YouTube data handling
-│   │   └── agents.js       # AI agent interface logic
+│   │   ├── agents.js       # AI agent interface logic
+│   │   └── utils/          # Client-side utility functions
+│   │       ├── uiUtils.js               # UI-related utility functions
+│   │       ├── modalUtils.js            # Modal management utilities
+│   │       ├── socketClientUtils.js     # Socket.IO client utilities
+│   │       ├── agentDisplayUtils.js     # Agent display utilities
+│   │       └── utils-loader.js          # Utility script loader
 │   └── index.html          # Main HTML page
 ├── server/                 # Backend code
 │   ├── agents/             # AI agent system
 │   │   ├── BaseAgent.js    # Base agent class
 │   │   ├── AgentManager.js # Agent coordinator
 │   │   ├── dal/            # Data Analysis Layer agents
+│   │   │   ├── ContentAnalysisAgent.js      # YouTube content analysis
+│   │   │   ├── GitAnalysisAgent.js          # Git repository analysis
+│   │   │   └── KnowledgeRetrievalAgent.js   # Knowledge retrieval
 │   │   ├── arl/            # Analogical Reasoning Layer agents
 │   │   ├── rpl/            # Result Presentation Layer agents
 │   │   ├── fll/            # Feedback and Learning Layer agents
 │   │   └── ccl/            # Control and Coordination Layer agents
 │   ├── config/             # Application configuration
+│   │   ├── config.js               # Main configuration
+│   │   └── gitConfig.js            # Git repository configuration
 │   ├── controllers/        # Request handlers
+│   │   ├── authController.js       # Authentication controller
+│   │   ├── dataController.js       # Data export controller
+│   │   └── agentController.js      # Agent system controller
 │   ├── services/           # Business logic
+│   │   ├── authService.js          # Authentication service
+│   │   ├── csvService.js           # CSV generation service
+│   │   ├── youtubeService.js       # YouTube API service
+│   │   └── agentService.js         # Agent orchestration service
 │   ├── utils/              # Helper functions
+│   │   ├── helpers.js             # General helper functions
+│   │   ├── agentUtils.js          # Agent-related utilities
+│   │   ├── gitUtils.js            # Git repository utilities
+│   │   ├── socketUtils.js         # Socket.IO server utilities
+│   │   └── workflowUtils.js       # Agent workflow utilities
 │   ├── routes/             # API routes
+│   │   ├── authRoutes.js          # Authentication routes
+│   │   ├── dataRoutes.js          # Data export routes
+│   │   └── agentRoutes.js         # Agent system routes
 │   └── server.js           # Express server setup
 ├── .env.example            # Environment variables template
 └── package.json            # Project metadata and dependencies
@@ -62,6 +90,7 @@ youtube-data-exporter/
 The application incorporates a sophisticated multi-agent system:
 
 1. **Data Analysis Layer (DAL)**
+   - Git Analysis Agent (A20): Analyzes Git repositories for code issues related to inclusivity, environmental sustainability, and ethics
    - Content Analysis Agent (A21): Processes YouTube data to extract themes and user interests
    - Knowledge Retrieval Agent (A22): Gathers relevant information to support analysis
 
@@ -79,6 +108,66 @@ The application incorporates a sophisticated multi-agent system:
 
 5. **Control and Coordination Layer (CCL)**
    - Orchestrator Agent (A6): Manages workflow and coordination among all agents
+
+## Utility Modules Organization
+
+The application's helper functions are organized into modular utility files:
+
+### Server-side Utilities
+
+- **agentUtils.js**: Agent processing and management utilities
+  - `mergeEditedContent`: Combines original and user-edited content
+  - `updateAgentState`: Updates agent processing state and history
+  - `conditionalApproval`: Determines if user approval is needed for a step
+  - `summarizeAgentOutput`: Formats agent output for display
+
+- **gitUtils.js**: Git repository management utilities
+  - `checkToolAvailability`: Verifies if Git tools are available
+  - `isSafePath`: Validates repository paths for security
+  - `runPatternBasedScan`: Scans code for patterns like inclusivity issues
+  - `extractContextAroundIssues`: Provides context for code issues
+
+- **socketUtils.js**: Socket.IO server utilities
+  - `setupSocketHandlers`: Initializes socket event handlers
+  - `handleStepApproval`: Processes step approvals from clients
+  - `handleStepRejection`: Manages workflow termination requests
+  - `handleFeedbackSubmission`: Processes user feedback submissions
+
+- **workflowUtils.js**: Agent workflow utilities
+  - `initSession`: Creates new agent processing sessions
+  - `updateOrchestrator`: Keeps orchestrator informed of progress
+  - `startOrchestratorMonitoring`: Monitors workflow execution
+  - `handleWorkflowTermination`: Manages workflow termination
+
+### Client-side Utilities
+
+- **uiUtils.js**: User interface utilities
+  - `updateUI`: Updates agent cards and UI elements
+  - `drawAgentConnections`: Visualizes connections between agents
+  - `addOrchestratorMessage`: Displays orchestrator messages
+  - `resetAgentSystem`: Resets UI state for new analysis
+
+- **modalUtils.js**: Modal dialog utilities
+  - `showApprovalModal`: Displays step approval requests
+  - `showFeedbackModal`: Collects user feedback
+  - `showFinalResultsModal`: Displays final analysis results
+  - `extractAnalogiesForDisplay`: Formats analogies for presentation
+
+- **socketClientUtils.js**: Socket.IO client utilities
+  - `initSocket`: Establishes socket connection
+  - `submitFeedbackViaSocket`: Sends feedback through socket
+  - `approveStepViaSocket`: Sends step approvals through socket
+  - `subscribeToSession`: Subscribes to agent session updates
+
+- **agentDisplayUtils.js**: Agent display utilities
+  - `handleStateUpdate`: Processes agent state changes
+  - `handleProcessingStep`: Updates UI for new processing steps
+  - `triggerGitAnalysis`: Initiates Git analysis manually
+  - `startStatusPolling`: Polls for workflow status updates
+
+- **utils-loader.js**: Utility script loader
+  - Manages loading of client-side utilities
+  - Ensures proper initialization sequence
 
 ## Prerequisites
 
@@ -152,6 +241,12 @@ The application incorporates a sophisticated multi-agent system:
 6. Review and approve each agent's output as prompted
 7. View the final analysis and insights
 8. Provide feedback to help improve future analyses
+
+### For Git Repository Analysis:
+1. Check the "Git Repository Analysis" option
+2. Test the Git connection to ensure access
+3. Run the analysis along with YouTube data or by itself
+4. Review findings related to code quality, inclusivity, and sustainability
 
 ## Permissions Required
 
