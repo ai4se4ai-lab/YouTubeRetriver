@@ -507,28 +507,14 @@
     
     <!-- Utility modules - load these first -->
     <script src="js/utils/utils-loader.js"></script>
-    
-    <!-- Wait for utilities to load before loading the agents -->
-    <script>
-        window.addEventListener('utils-loaded', function() {
-            // Load agents.js after utilities are loaded
-            const agentsScript1 = document.createElement('script');
-            agentsScript1.src = 'js/agents.js';
-            document.body.appendChild(agentsScript1);
+    <script src="js/utils/uiUtils.js"></script>
+    <script src="js/utils/modalUtils.js"></script>
+    <script src="js/utils/socketClientUtils.js"></script>
+    <script src="js/utils/agentDisplayUtils.js"></script>
+    <script src="js/agents.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/dataHandler.js"></script>
+    <script src="js/app.js"></script>
 
-            const agentsScript2 = document.createElement('script');
-            agentsScript2.src = 'js/auth.js';
-            document.body.appendChild(agentsScript2);
-
-            const agentsScript3 = document.createElement('script');
-            agentsScript3.src = 'js/dataHandler.js';
-            document.body.appendChild(agentsScript3);
-            
-            // Load main app.js after utilities are loaded
-            const appScript = document.createElement('script');
-            appScript.src = 'js/app.js';
-            document.body.appendChild(appScript);
-        });
-    </script>
 </body>
 </html>

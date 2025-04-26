@@ -51,41 +51,6 @@ console.log(`GitAnalysisAgent: Using repo URL ${repoConfig.repoUrl}`);
 this.repoPath = gitConfig.getRepoPath(this.currentSessionId);
 console.log(`GitAnalysisAgent: Using repo path ${this.repoPath}`);
 
-// Start Git monitoring immediately
-console.log("Starting persistent Git monitoring on server startup");
-if (repoConfig.repoUrl) {
-  // Set up persistent monitoring with specific repository details
-  const gitMonitoringOptions = {
-    repoUrl: repoConfig.repoUrl,
-    targetBranch: repoConfig.targetBranch || "main",
-    username: repoConfig.username || "",
-    token: repoConfig.token || "",
-  };
-
-  // Create a monitoring session
-  const monitoringSessionId = `persistent_monitor_${Date.now()}`;
-
-  // Initialize Git agent with the monitoring session
-  const gitAgent = agentManager.getAgent("gitAnalysis");
-  gitAgent.setSession(monitoringSessionId);
-
-  // Connect to repository with provided options
-  gitAgent
-    .connectToRepository(gitMonitoringOptions)
-    .then((connected) => {
-      if (connected) {
-        console.log(
-          `Successfully connected to Git repository: ${repoConfig.repoUrl}`
-        );
-      } else {
-        console.error("Failed to connect to Git repository");
-      }
-    })
-    .catch((error) => {
-      console.error("Error connecting to Git repository:", error);
-    });
-}
-
 // Listen for Git changes
 agentManager.on("gitChangesDetected", async (changeInfo) => {
   console.log("Git changes detected by monitoring:", changeInfo.timestamp);

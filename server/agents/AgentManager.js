@@ -67,94 +67,6 @@ class AgentManager extends EventEmitter {
 
     // Add flag to track if workflow should be triggered by Git changes
     this.gitTriggeredWorkflow = false;
-
-    // Start Git monitoring by default when the system initializes
-    this.startDefaultGitMonitoring();
-  }
-
-  /**
-   * Start default Git repository monitoring
-   */
-  startDefaultGitMonitoring() {
-    if (repoConfig.repoUrl) {
-      console.log("Starting persistent Git repository monitoring");
-
-      // First, set up the Git agent for continuous monitoring
-      const gitAgent = this.agents.gitAnalysis;
-      gitAgent.startMonitoring();
-
-      // Create a dedicated session for background monitoring
-      const monitoringSessionId = `persistent_monitor_${Date.now()}`;
-      gitAgent.setSession(monitoringSessionId);
-
-      // Connect to the repository
-      gitAgent
-        .connectToRepository({
-          repoUrl: gitAnalysisAgent.git,
-          targetBranch: gitConfig.targetBranch || "main",
-          username: gitConfig.username || "",
-          token: gitConfig.token || "",
-        })
-        .then((connected) => {
-          if (!connected) {
-            console.error(
-              "Failed to establish initial connection to Git repository"
-            );
-          }
-        });
-
-      // Use the orchestrator to manage the Git agent
-      const orchestrator = this.agents.orchestrator;
-
-      // Poll using the orchestrator to command the Git agent
-      this.gitPollingInterval = setInterval(async () => {
-        try {
-          // Have orchestrator command Git agent to check for changes
-          const changeData = await orchestrator.commandGitAnalysisAgent(
-            "check"
-          );
-
-          if (changeData.hasChanges) {
-            console.log("Default polling: Git changes detected!");
-
-            // Emit an event for clients
-            this.emit("gitChangesDetected", {
-              changeData,
-              timestamp: new Date().toISOString(),
-              automatic: true,
-            });
-
-            // Have orchestrator command Git agent to analyze changes
-            await orchestrator.commandGitAnalysisAgent("analyze", {
-              sessionId: monitoringSessionId,
-              options: {
-                repoUrl: repoConfig.repoUrl,
-                targetBranch: repoConfig.targetBranch || "main",
-              },
-            });
-          }
-        } catch (error) {
-          console.error("Error in Git monitoring:", error);
-
-          // Try to reconnect after error using orchestrator
-          setTimeout(async () => {
-            try {
-              await orchestrator.commandGitAnalysisAgent("reconnect", {
-                options: {
-                  repoUrl: repoConfig.repoUrl,
-                  targetBranch: repoConfig.targetBranch || "main",
-                },
-              });
-            } catch (reconnectError) {
-              console.error(
-                "Failed to reconnect to Git repository:",
-                reconnectError
-              );
-            }
-          }, 60000);
-        }
-      }, 30000);
-    }
   }
 
   /**
@@ -335,7 +247,7 @@ class AgentManager extends EventEmitter {
     this.gitTriggeredWorkflow = options.gitTriggeredOnly || false;
 
     // Check which agents require approval
-    const requiredApprovals = gitConfig.agentApprovals.required;
+    const requiredApprovals = gitConfig.agentApprovals?.required || "none";
 
     // Modified approval function that checks the configuration and calls utility
     const conditionalApprovalWrapper = async (agentName, result) => {
