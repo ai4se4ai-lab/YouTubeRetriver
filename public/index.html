@@ -504,9 +504,6 @@
     <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.0/build/highlight.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     
-    <!-- Core dependencies -->
-    <script src="js/auth.js"></script>
-    <script src="js/dataHandler.js"></script>
     
     <!-- Utility modules - load these first -->
     <script src="js/utils/utils-loader.js"></script>
@@ -515,9 +512,17 @@
     <script>
         window.addEventListener('utils-loaded', function() {
             // Load agents.js after utilities are loaded
-            const agentsScript = document.createElement('script');
-            agentsScript.src = 'js/agents.js';
-            document.body.appendChild(agentsScript);
+            const agentsScript1 = document.createElement('script');
+            agentsScript1.src = 'js/agents.js';
+            document.body.appendChild(agentsScript1);
+
+            const agentsScript2 = document.createElement('script');
+            agentsScript2.src = 'js/auth.js';
+            document.body.appendChild(agentsScript2);
+
+            const agentsScript3 = document.createElement('script');
+            agentsScript3.src = 'js/dataHandler.js';
+            document.body.appendChild(agentsScript3);
             
             // Load main app.js after utilities are loaded
             const appScript = document.createElement('script');

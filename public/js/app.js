@@ -2,8 +2,35 @@
  * Main application file
  * Handles UI interactions and orchestrates auth and data handling operations
  */
-document.addEventListener("DOMContentLoaded", () => {
-  console.log("DOM loaded, initializing app");
+
+// Wait for auth module to be initialized before setting up auth-related functionality
+window.addEventListener("auth-initialized", initApp);
+document.addEventListener("DOMContentLoaded", initApp);
+
+// Track if we've already initialized
+let appInitialized = false;
+
+function initApp() {
+  // Only initialize once both DOM and auth are ready
+  // Also verify both auth and dataHandler modules are available
+  if (
+    appInitialized ||
+    !document.body ||
+    typeof window.auth === "undefined" ||
+    typeof dataHandler === "undefined"
+  ) {
+    // Log more detailed info about what's missing
+    console.log("Waiting for initialization:", {
+      appInitialized,
+      domReady: !!document.body,
+      authAvailable: typeof window.auth !== "undefined",
+      dataHandlerAvailable: typeof dataHandler !== "undefined",
+    });
+    return;
+  }
+
+  appInitialized = true;
+  console.log("App initializing with auth module and DOM ready");
 
   // Flag to track Git connection status
   let gitConnectionSuccessful = false;
@@ -41,6 +68,7 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log("Login status element found:", !!loginStatus);
   console.log("Data section found:", !!dataSection);
   console.log("Agent start button found:", !!agentStartButton);
+  console.log("dataHandler available:", !!dataHandler);
 
   // Initialize agent start button as disabled
   if (agentStartButton) {
@@ -49,7 +77,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Check if user is already authenticated on page load
-  auth
+  window.auth
     .checkAuthStatus()
     .then((isAuthenticated) => {
       console.log("Auth status checked, authenticated:", isAuthenticated);
@@ -67,7 +95,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (this.checked) {
         gitRepoDetails.classList.remove("hidden");
         if (
-          auth.isAuthenticated() &&
+          window.auth.isAuthenticated() &&
           configRepoUrl.textContent === "Loading..."
         ) {
           loadGitConfigFromServer();
@@ -98,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${auth.getAccessToken()}`,
+            Authorization: `Bearer ${window.auth.getAccessToken()}`,
           },
           body: JSON.stringify({}), // Empty object since config comes from server
         });
@@ -128,11 +156,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // Authentication button click event
   if (authButton) {
     console.log("Adding click event to auth button");
-    authButton.addEventListener("click", () => {
-      console.log("Auth button clicked");
-      if (auth.isAuthenticated()) {
+    authButton.addEventListener("click", function (e) {
+      e.preventDefault(); // Prevent any default behavior
+      console.log("Auth button clicked, auth module:", window.auth);
+
+      if (window.auth.isAuthenticated()) {
         console.log("User is authenticated, signing out");
-        auth
+        window.auth
           .signOut()
           .then(() => {
             updateUIOnAuth(false);
@@ -146,7 +176,7 @@ document.addEventListener("DOMContentLoaded", () => {
           });
       } else {
         console.log("User is not authenticated, signing in");
-        auth
+        window.auth
           .signIn()
           .then(() => {
             console.log("Sign in successful");
@@ -196,7 +226,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Hide agent system if visible
       agentSystemSection.classList.add("hidden");
 
-      // Start the export process
+      // Start the export process - use dataHandler directly, not window.dataHandler
       dataHandler
         .exportData(options, updateProgress)
         .then((filename) => {
@@ -262,7 +292,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const response = await fetch("/api/agents/git-config", {
         headers: {
-          Authorization: `Bearer ${auth.getAccessToken()}`,
+          Authorization: `Bearer ${window.auth.getAccessToken()}`,
         },
       });
 
@@ -289,7 +319,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function startAgentProcessing() {
     try {
       // Check if user is authenticated
-      if (!auth.isAuthenticated()) {
+      if (!window.auth.isAuthenticated()) {
         showError("Please connect to YouTube first");
         return;
       }
@@ -397,4 +427,20 @@ document.addEventListener("DOMContentLoaded", () => {
     exportCompleted = success;
     updateAnalysisButtonState(success);
   };
-});
+}
+
+// Ensure app gets initialized even if auth-initialized event doesn't fire after timeout
+setTimeout(() => {
+  if (!appInitialized) {
+    console.log("Fallback initialization after timeout");
+    initApp();
+  }
+}, 3000);
+
+// Make a final check after a longer timeout in case script loading is very slow
+setTimeout(() => {
+  if (!appInitialized) {
+    console.log("Final initialization attempt");
+    initApp();
+  }
+}, 6000);
