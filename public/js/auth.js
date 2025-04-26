@@ -7,6 +7,7 @@ const auth = (() => {
   let _isAuthenticated = false;
   let _accessToken = null;
   let _tokenExpiry = null;
+  let _isInitialized = false;
 
   // Constants
   const AUTH_ENDPOINT = "/api/auth";
@@ -23,8 +24,12 @@ const auth = (() => {
     _tokenExpiry = expiryTime;
 
     // Save to localStorage for persistence
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(EXPIRY_KEY, expiryTime.toString());
+    try {
+      localStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(EXPIRY_KEY, expiryTime.toString());
+    } catch (e) {
+      console.error("Error saving to localStorage:", e);
+    }
 
     _isAuthenticated = true;
   };
@@ -33,8 +38,14 @@ const auth = (() => {
     console.log("Clearing token");
     _accessToken = null;
     _tokenExpiry = null;
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(EXPIRY_KEY);
+
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(EXPIRY_KEY);
+    } catch (e) {
+      console.error("Error clearing localStorage:", e);
+    }
+
     _isAuthenticated = false;
   };
 
@@ -48,19 +59,27 @@ const auth = (() => {
 
   const _loadTokenFromStorage = () => {
     console.log("Loading token from storage");
-    const token = localStorage.getItem(TOKEN_KEY);
-    const expiry = localStorage.getItem(EXPIRY_KEY);
 
-    if (token && expiry) {
-      _accessToken = token;
-      _tokenExpiry = parseInt(expiry, 10);
-      _isAuthenticated = _isTokenValid();
-      console.log("Token loaded, is authenticated:", _isAuthenticated);
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const expiry = localStorage.getItem(EXPIRY_KEY);
 
-      // Clean up if token is expired
-      if (!_isAuthenticated) {
-        _clearToken();
+      if (token && expiry) {
+        _accessToken = token;
+        _tokenExpiry = parseInt(expiry, 10);
+        _isAuthenticated = _isTokenValid();
+        console.log("Token loaded, is authenticated:", _isAuthenticated);
+
+        // Clean up if token is expired
+        if (!_isAuthenticated) {
+          _clearToken();
+        }
       }
+    } catch (e) {
+      console.error("Error loading from localStorage:", e);
+      _accessToken = null;
+      _tokenExpiry = null;
+      _isAuthenticated = false;
     }
   };
 
@@ -90,13 +109,28 @@ const auth = (() => {
   };
 
   // Public API
-  return {
+  const authModule = {
     /**
      * Initialize the auth module
      */
     init() {
       console.log("Initializing auth module");
       _loadTokenFromStorage();
+      _isInitialized = true;
+
+      // Dispatch an event to notify app.js that auth is ready
+      const event = new CustomEvent("auth-initialized");
+      window.dispatchEvent(event);
+
+      return this;
+    },
+
+    /**
+     * Check if auth module is initialized
+     * @returns {boolean} Initialization status
+     */
+    isInitialized() {
+      return _isInitialized;
     },
 
     /**
@@ -149,6 +183,9 @@ const auth = (() => {
 
       if (!authWindow) {
         console.error("Popup blocked");
+        alert(
+          "Popup blocked. Please allow popups for this site and try again."
+        );
         throw new Error("Popup blocked. Please allow popups for this site.");
       }
 
@@ -219,8 +256,17 @@ const auth = (() => {
       }
     },
   };
+
+  return authModule;
 })();
 
 // Initialize auth module when script loads
 console.log("Auth script loaded");
-auth.init();
+try {
+  auth.init();
+
+  // Make auth available on window for debugging
+  window.auth = auth;
+} catch (e) {
+  console.error("Error initializing auth module:", e);
+}

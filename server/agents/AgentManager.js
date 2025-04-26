@@ -4,13 +4,30 @@
  * Centralizes access to all agents and manages their execution
  */
 const EventEmitter = require("events");
-const config = require("../config/config");
 const gitConfig = require("../config/gitConfig");
+
+// Import utility functions
+const {
+  mergeEditedContent,
+  updateAgentState,
+  needsApproval,
+  conditionalApproval,
+} = require("../utils/agentUtils");
+
+const { startGitPolling, ensureReposDirExists } = require("../utils/gitUtils");
+
+const {
+  initSession,
+  updateOrchestrator,
+  startOrchestratorMonitoring,
+  handleWorkflowTermination,
+  processFeedback,
+} = require("../utils/workflowUtils");
 
 // Import all agents
 const contentAnalysisAgent = require("./dal/ContentAnalysisAgent");
 const knowledgeRetrievalAgent = require("./dal/KnowledgeRetrievalAgent");
-const gitAnalysisAgent = require("./dal/GitAnalysisAgent"); // Add Git Analysis Agent
+const gitAnalysisAgent = require("./dal/GitAnalysisAgent");
 const analogyGenerationAgent = require("./arl/AnalogyGenerationAgent");
 const analogyValidationAgent = require("./arl/AnalogyValidationAgent");
 const analogyRefinementAgent = require("./arl/AnalogyRefinementAgent");
@@ -19,13 +36,13 @@ const userFeedbackAgent = require("./fll/UserFeedbackAgent");
 const learningAgent = require("./fll/LearningAgent");
 const orchestratorAgent = require("./ccl/OrchestratorAgent");
 
-// Get repository configuration for current session
-const repoConfig = gitConfig.getConfig(this.currentSessionId);
-console.log(`GitAnalysisAgent: Using repo URL ${repoConfig.repoUrl}`);
+// Get repository configuration
+const repoConfig = gitConfig.getConfig();
+console.log(`Agent Manager: Using repo URL ${repoConfig.repoUrl}`);
 
-// Get unique repository path for this session
-this.repoPath = gitConfig.getRepoPath(this.currentSessionId);
-console.log(`GitAnalysisAgent: Using repo path ${this.repoPath}`);
+// Get repository path
+const repoPath = gitConfig.getRepoPath();
+console.log(`Agent Manager: Using repo path ${repoPath}`);
 
 class AgentManager extends EventEmitter {
   constructor() {
@@ -50,94 +67,6 @@ class AgentManager extends EventEmitter {
 
     // Add flag to track if workflow should be triggered by Git changes
     this.gitTriggeredWorkflow = false;
-
-    // Start Git monitoring by default when the system initializes
-    this.startDefaultGitMonitoring();
-  }
-
-  /**
-   * Start default Git repository monitoring
-   */
-  startDefaultGitMonitoring() {
-    if (repoConfig.repoUrl) {
-      console.log("Starting persistent Git repository monitoring");
-
-      // First, set up the Git agent for continuous monitoring
-      const gitAgent = this.agents.gitAnalysis;
-      gitAgent.startMonitoring();
-
-      // Create a dedicated session for background monitoring
-      const monitoringSessionId = `persistent_monitor_${Date.now()}`;
-      gitAgent.setSession(monitoringSessionId);
-
-      // Connect to the repository
-      gitAgent
-        .connectToRepository({
-          repoUrl: gitAnalysisAgent.git,
-          targetBranch: gitConfig.targetBranch || "main",
-          username: gitConfig.username || "",
-          token: gitConfig.token || "",
-        })
-        .then((connected) => {
-          if (!connected) {
-            console.error(
-              "Failed to establish initial connection to Git repository"
-            );
-          }
-        });
-
-      // Use the orchestrator to manage the Git agent
-      const orchestrator = this.agents.orchestrator;
-
-      // Poll using the orchestrator to command the Git agent
-      this.gitPollingInterval = setInterval(async () => {
-        try {
-          // Have orchestrator command Git agent to check for changes
-          const changeData = await orchestrator.commandGitAnalysisAgent(
-            "check"
-          );
-
-          if (changeData.hasChanges) {
-            console.log("Default polling: Git changes detected!");
-
-            // Emit an event for clients
-            this.emit("gitChangesDetected", {
-              changeData,
-              timestamp: new Date().toISOString(),
-              automatic: true,
-            });
-
-            // Have orchestrator command Git agent to analyze changes
-            await orchestrator.commandGitAnalysisAgent("analyze", {
-              sessionId: monitoringSessionId,
-              options: {
-                repoUrl: repoConfig.repoUrl,
-                targetBranch: repoConfig.targetBranch || "main",
-              },
-            });
-          }
-        } catch (error) {
-          console.error("Error in Git monitoring:", error);
-
-          // Try to reconnect after error using orchestrator
-          setTimeout(async () => {
-            try {
-              await orchestrator.commandGitAnalysisAgent("reconnect", {
-                options: {
-                  repoUrl: repoConfig.repoUrl,
-                  targetBranch: repoConfig.targetBranch || "main",
-                },
-              });
-            } catch (reconnectError) {
-              console.error(
-                "Failed to reconnect to Git repository:",
-                reconnectError
-              );
-            }
-          }, 60000);
-        }
-      }, 30000);
-    }
   }
 
   /**
@@ -160,49 +89,23 @@ class AgentManager extends EventEmitter {
     this.stopGitRepositoryPolling();
 
     if (options && options.enableGitAnalysis) {
-      console.log("Starting Git repository polling");
-
-      // Poll every 60 seconds (adjust as needed)
-      this.gitPollingInterval = setInterval(async () => {
-        try {
-          console.log("Polling Git repository for changes");
-
+      // Use startGitPolling utility function
+      this.gitPollingInterval = startGitPolling(
+        options,
+        async () => {
           // Get the Git Analysis Agent
           const gitAgent = this.agents.gitAnalysis;
-
-          // Check for changes
+          // Check for changes if connected
           if (gitAgent.isConnected) {
-            const changeData = await gitAgent.checkForChanges();
-
-            if (changeData.hasChanges) {
-              console.log("Git changes detected, triggering analysis");
-
-              // Emit event about new changes
-              this.emit("gitChangesDetected", {
-                changeData,
-                timestamp: new Date().toISOString(),
-              });
-
-              // Start a new workflow triggered by Git changes
-              // Only if not already in an active workflow
-              if (!this.activeSession || this.currentState.completed) {
-                await this.processGitChanges(changeData);
-              } else {
-                console.log(
-                  "Active workflow in progress, not starting Git-triggered workflow"
-                );
-              }
-            } else {
-              console.log("No Git changes detected during polling");
-            }
-          } else {
-            console.log("Git agent not connected, attempting to connect");
-            await gitAgent.connectToRepository();
+            return await gitAgent.checkForChanges();
           }
-        } catch (error) {
-          console.error("Error during Git repository polling:", error);
-        }
-      }, 60000); // 60 seconds
+          // Try to connect if not
+          await gitAgent.connectToRepository();
+          return { hasChanges: false };
+        },
+        (eventName, data) => this.emit(eventName, data),
+        60000 // 60 seconds interval
+      );
     }
   }
 
@@ -225,7 +128,6 @@ class AgentManager extends EventEmitter {
         message: "Starting a new workflow triggered by Git changes",
       });
 
-      // Run the workflow with Git-triggered flag
       // Run the workflow with Git-triggered flag
       await this.runFullWorkflow(
         { gitAnalysisData: changeData }, // Pass Git data here instead of empty object
@@ -258,7 +160,12 @@ class AgentManager extends EventEmitter {
     // Stop any existing Git polling
     this.stopGitRepositoryPolling();
 
-    this.activeSession = sessionId || `session_${Date.now()}`;
+    // Use the initSession utility
+    this.activeSession = initSession(sessionId, () => {
+      // Reset all agents
+      Object.values(this.agents).forEach((agent) => agent.reset());
+    });
+
     this.processingHistory = [];
     this.currentState = {
       sessionId: this.activeSession,
@@ -266,9 +173,6 @@ class AgentManager extends EventEmitter {
       completed: false,
       steps: [],
     };
-
-    // Reset all agents
-    Object.values(this.agents).forEach((agent) => agent.reset());
 
     return this.activeSession;
   }
@@ -307,63 +211,20 @@ class AgentManager extends EventEmitter {
   }
 
   /**
-   * Get agent statuses
-   * @returns {Object} - Status of all agents
-   */
-  getAgentStatuses() {
-    const statuses = {};
-    for (const [key, agent] of Object.entries(this.agents)) {
-      statuses[key] = agent.getStatus();
-    }
-    return statuses;
-  }
-
-  /**
    * Update processing state with a new step
    * @param {string} agentName - Name of the agent
    * @param {Object} result - Processing result
    */
   updateState(agentName, result) {
-    // Special handling for Git Analysis Agent in monitoring mode
-    if (agentName === "gitAnalysis" && this.agents.gitAnalysis.isMonitoring) {
-      // Clone result but override processed state
-      const monitoringResult = { ...result, processed: false };
-      this.processingHistory.push(monitoringResult);
-
-      this.currentState.steps.push({
-        agentName,
-        timestamp: Date.now(),
-        duration: result.duration,
-        success: true, // Always consider successful in monitoring mode
-        hasError: !!result.error,
-        isMonitoring: true,
-      });
-
-      // Emit update event with monitoring state
-      this.emit("stateUpdate", {
-        agent: agentName,
-        result: monitoringResult,
-        state: this.currentState,
-        isMonitoring: true,
-      });
-    } else {
-      this.processingHistory.push(result);
-
-      this.currentState.steps.push({
-        agentName,
-        timestamp: Date.now(),
-        duration: result.duration,
-        success: result.processed,
-        hasError: !!result.error,
-      });
-
-      // Emit update event
-      this.emit("stateUpdate", {
-        agent: agentName,
-        result: result,
-        state: this.currentState,
-      });
-    }
+    // Use the updateAgentState utility function
+    updateAgentState(
+      this.currentState,
+      this.processingHistory,
+      agentName,
+      result,
+      (eventName, data) => this.emit(eventName, data),
+      this.agents
+    );
   }
 
   // Monitor interval for the orchestrator
@@ -386,36 +247,17 @@ class AgentManager extends EventEmitter {
     this.gitTriggeredWorkflow = options.gitTriggeredOnly || false;
 
     // Check which agents require approval
-    const requiredApprovals = config.agentApprovals.required;
+    const requiredApprovals = gitConfig.agentApprovals?.required || "none";
 
-    // Helper function to determine if an agent needs approval
-    const needsApproval = (agentName) => {
-      // Override with automatic approvals if specified
-      if (options.automaticApprovals) return false;
-
-      if (requiredApprovals === "all") return true;
-      if (requiredApprovals === "none") return false;
-      return requiredApprovals.includes(agentName);
-    };
-
-    // Modified approval function that checks the configuration
-    const conditionalApproval = async (agentName, result) => {
-      console.log(
-        `Checking if ${agentName} requires user approval based on configuration`
+    // Modified approval function that checks the configuration and calls utility
+    const conditionalApprovalWrapper = async (agentName, result) => {
+      return conditionalApproval(
+        agentName,
+        result,
+        approvalCallback,
+        requiredApprovals,
+        options
       );
-      if (needsApproval(agentName)) {
-        console.log(
-          `User approval required for ${agentName} based on configuration`
-        );
-        // Request approval from user
-        return approvalCallback(agentName, result);
-      } else {
-        // Skip approval and continue immediately
-        console.log(
-          `Skipping approval for ${agentName} based on configuration`
-        );
-        return result;
-      }
     };
 
     try {
@@ -435,8 +277,14 @@ class AgentManager extends EventEmitter {
 
       this.updateState("orchestrator", workflowPlan);
 
-      // Start the orchestrator monitoring
-      this.#startOrchestratorMonitoring();
+      // Start the orchestrator monitoring using utility function
+      this.#monitorIntervalId = startOrchestratorMonitoring(
+        this.agents.orchestrator,
+        this.agents,
+        this.processingHistory,
+        (agentName, result) => this.updateState(agentName, result),
+        (eventName, data) => this.emit(eventName, data)
+      );
 
       // Step 1: Git Repository Analysis (now always runs first if enabled)
       let gitAnalysisResult = null;
@@ -463,22 +311,26 @@ class AgentManager extends EventEmitter {
           !gitAnalysisResult.result.output.includes("no_changes");
 
         // Wait for user approval and get edited content if any
-        const approvedGitAnalysis = await conditionalApproval(
+        const approvedGitAnalysis = await conditionalApprovalWrapper(
           "gitAnalysis",
           gitAnalysisResult
         );
 
         // Create a modified result object that preserves the original structure but with updated content
-        const finalGitAnalysis = this.#mergeEditedContent(
+        const finalGitAnalysis = mergeEditedContent(
           gitAnalysisResult,
           approvedGitAnalysis
         );
 
         // Update orchestrator about progress
-        await this.#updateOrchestrator(
+        await updateOrchestrator(
           gitChangesDetected
             ? "Git Analysis completed with changes detected, proceeding with workflow"
-            : "Git Analysis completed with no changes detected"
+            : "Git Analysis completed with no changes detected",
+          this.agents.orchestrator,
+          this.currentState,
+          this.processingHistory,
+          (agentName, result) => this.updateState(agentName, result)
         );
 
         gitAnalysisResult = finalGitAnalysis;
@@ -561,20 +413,24 @@ class AgentManager extends EventEmitter {
         this.updateState("contentAnalysis", contentAnalysisResult);
 
         // Wait for user approval and get edited content if any
-        const approvedContentAnalysis = await conditionalApproval(
+        const approvedContentAnalysis = await conditionalApprovalWrapper(
           "contentAnalysis",
           contentAnalysisResult
         );
 
         // Create a modified result object that preserves the original structure but with updated content
-        const finalContentAnalysis = this.#mergeEditedContent(
+        const finalContentAnalysis = mergeEditedContent(
           contentAnalysisResult,
           approvedContentAnalysis
         );
 
         // Update orchestrator about progress
-        await this.#updateOrchestrator(
-          "Content Analysis completed, moving to Knowledge Retrieval"
+        await updateOrchestrator(
+          "Content Analysis completed, moving to Knowledge Retrieval",
+          this.agents.orchestrator,
+          this.currentState,
+          this.processingHistory,
+          (agentName, result) => this.updateState(agentName, result)
         );
 
         contentAnalysisResult = finalContentAnalysis;
@@ -596,20 +452,24 @@ class AgentManager extends EventEmitter {
         this.updateState("knowledgeRetrieval", knowledgeResult);
 
         // Wait for user approval and get edited content if any
-        const approvedKnowledgeResult = await conditionalApproval(
+        const approvedKnowledgeResult = await conditionalApprovalWrapper(
           "knowledgeRetrieval",
           knowledgeResult
         );
 
         // Merge edited content if any
-        const finalKnowledgeResult = this.#mergeEditedContent(
+        const finalKnowledgeResult = mergeEditedContent(
           knowledgeResult,
           approvedKnowledgeResult
         );
 
         // Update orchestrator about progress
-        await this.#updateOrchestrator(
-          "Knowledge Retrieval completed, moving to Analogy Generation"
+        await updateOrchestrator(
+          "Knowledge Retrieval completed, moving to Analogy Generation",
+          this.agents.orchestrator,
+          this.currentState,
+          this.processingHistory,
+          (agentName, result) => this.updateState(agentName, result)
         );
 
         knowledgeResult = finalKnowledgeResult;
@@ -633,20 +493,24 @@ class AgentManager extends EventEmitter {
       this.updateState("analogyGeneration", analogiesResult);
 
       // Wait for user approval and get edited content if any
-      const approvedAnalogiesResult = await conditionalApproval(
+      const approvedAnalogiesResult = await conditionalApprovalWrapper(
         "analogyGeneration",
         analogiesResult
       );
 
       // Merge edited content if any
-      const finalAnalogiesResult = this.#mergeEditedContent(
+      const finalAnalogiesResult = mergeEditedContent(
         analogiesResult,
         approvedAnalogiesResult
       );
 
       // Update orchestrator about progress
-      await this.#updateOrchestrator(
-        "Analogy Generation completed, moving to Analogy Validation"
+      await updateOrchestrator(
+        "Analogy Generation completed, moving to Analogy Validation",
+        this.agents.orchestrator,
+        this.currentState,
+        this.processingHistory,
+        (agentName, result) => this.updateState(agentName, result)
       );
 
       // Step 5: Analogy Validation
@@ -664,20 +528,24 @@ class AgentManager extends EventEmitter {
       this.updateState("analogyValidation", validationResult);
 
       // Wait for user approval and get edited content if any
-      const approvedValidationResult = await conditionalApproval(
+      const approvedValidationResult = await conditionalApprovalWrapper(
         "analogyValidation",
         validationResult
       );
 
       // Merge edited content if any
-      const finalValidationResult = this.#mergeEditedContent(
+      const finalValidationResult = mergeEditedContent(
         validationResult,
         approvedValidationResult
       );
 
       // Update orchestrator about progress
-      await this.#updateOrchestrator(
-        "Analogy Validation completed, moving to Analogy Refinement"
+      await updateOrchestrator(
+        "Analogy Validation completed, moving to Analogy Refinement",
+        this.agents.orchestrator,
+        this.currentState,
+        this.processingHistory,
+        (agentName, result) => this.updateState(agentName, result)
       );
 
       // Step 6: Analogy Refinement
@@ -695,20 +563,24 @@ class AgentManager extends EventEmitter {
       this.updateState("analogyRefinement", refinementResult);
 
       // Wait for user approval and get edited content if any
-      const approvedRefinementResult = await conditionalApproval(
+      const approvedRefinementResult = await conditionalApprovalWrapper(
         "analogyRefinement",
         refinementResult
       );
 
       // Merge edited content if any
-      const finalRefinementResult = this.#mergeEditedContent(
+      const finalRefinementResult = mergeEditedContent(
         refinementResult,
         approvedRefinementResult
       );
 
       // Update orchestrator about progress
-      await this.#updateOrchestrator(
-        "Analogy Refinement completed, moving to Explanation Generation"
+      await updateOrchestrator(
+        "Analogy Refinement completed, moving to Explanation Generation",
+        this.agents.orchestrator,
+        this.currentState,
+        this.processingHistory,
+        (agentName, result) => this.updateState(agentName, result)
       );
 
       // Step 7: Explanation Generation
@@ -728,20 +600,24 @@ class AgentManager extends EventEmitter {
       this.updateState("explanation", explanationResult);
 
       // Wait for user approval and get edited content if any
-      const approvedExplanationResult = await conditionalApproval(
+      const approvedExplanationResult = await conditionalApprovalWrapper(
         "explanation",
         explanationResult
       );
 
       // Merge edited content if any
-      const finalExplanationResult = this.#mergeEditedContent(
+      const finalExplanationResult = mergeEditedContent(
         explanationResult,
         approvedExplanationResult
       );
 
       // Update orchestrator about completion
-      await this.#updateOrchestrator(
-        "Explanation Generation completed, workflow is now complete"
+      await updateOrchestrator(
+        "Explanation Generation completed, workflow is now complete",
+        this.agents.orchestrator,
+        this.currentState,
+        this.processingHistory,
+        (agentName, result) => this.updateState(agentName, result)
       );
 
       // Complete workflow
@@ -794,50 +670,6 @@ class AgentManager extends EventEmitter {
   }
 
   /**
-   * Start continuous orchestrator monitoring
-   * @private
-   */
-  #startOrchestratorMonitoring() {
-    // Clear any existing interval
-    this.#stopOrchestratorMonitoring();
-
-    // Start a new monitoring interval - check every 10 seconds
-    this.#monitorIntervalId = setInterval(async () => {
-      try {
-        // Get current state of all agents
-        const agentStatuses = {};
-        for (const [key, agent] of Object.entries(this.agents)) {
-          agentStatuses[key] = agent.getStatus();
-        }
-
-        // Send to orchestrator for monitoring
-        const monitorResult = await this.agents.orchestrator.monitorWorkflow(
-          agentStatuses,
-          this.processingHistory[0] // Original workflow plan
-        );
-
-        // Only update state if there's something significant to report
-        if (
-          (monitorResult.result &&
-            monitorResult.result.output.includes("Alert")) ||
-          monitorResult.result.output.includes("bottleneck") ||
-          monitorResult.result.output.includes("intervention")
-        ) {
-          this.updateState("orchestratorMonitor", monitorResult);
-
-          // Emit an event so the UI can show the orchestrator is active
-          this.emit("orchestratorUpdate", {
-            timestamp: new Date().toISOString(),
-            message: monitorResult.result.output,
-          });
-        }
-      } catch (error) {
-        console.error("Error in orchestrator monitoring:", error);
-      }
-    }, 10000); // Every 10 seconds
-  }
-
-  /**
    * Stop the orchestrator monitoring
    * @private
    */
@@ -849,55 +681,20 @@ class AgentManager extends EventEmitter {
   }
 
   /**
-   * Update the orchestrator with the current step progress
-   * @param {string} message - Progress message
-   * @private
+   * Handle workflow termination
+   * @param {string} sessionId - The session ID
+   * @param {Object} terminationData - Information about the termination
+   * @returns {Promise<Object>} - Termination summary
    */
-  async #updateOrchestrator(message) {
-    try {
-      const updateResult = await this.agents.orchestrator.monitorWorkflow(
-        {
-          message,
-          timestamp: new Date().toISOString(),
-          currentState: this.currentState,
-        },
-        this.processingHistory[0] // Original workflow plan
-      );
-
-      // Update state and emit event
-      this.updateState("orchestratorProgress", updateResult);
-
-      this.emit("orchestratorUpdate", {
-        timestamp: new Date().toISOString(),
-        message: updateResult.result?.output || message,
-      });
-    } catch (error) {
-      console.error("Error updating orchestrator:", error);
-    }
-  }
-
-  /**
-   * Merge edited content with original result object
-   * @param {Object} originalResult - Original result object
-   * @param {Object} editedResult - Potentially edited result object
-   * @returns {Object} - Merged result object
-   * @private
-   */
-  #mergeEditedContent(originalResult, editedResult) {
-    // If no edited content, return original
-    if (!editedResult) {
-      return originalResult;
-    }
-
-    // Create a copy of the original result
-    const mergedResult = JSON.parse(JSON.stringify(originalResult));
-
-    // If the edited result has updated output, use it
-    if (editedResult.result && editedResult.result.output) {
-      mergedResult.result.output = editedResult.result.output;
-    }
-
-    return mergedResult;
+  async handleTermination(sessionId, terminationData) {
+    return handleWorkflowTermination(
+      terminationData,
+      this.agents.orchestrator,
+      this.activeSession,
+      this.currentState,
+      this.processingHistory,
+      (eventName, data) => this.emit(eventName, data)
+    );
   }
 
   /**
@@ -906,86 +703,15 @@ class AgentManager extends EventEmitter {
    * @param {Object} explanationResult - Final explanation presented to user
    * @returns {Promise<Object>} - Processed feedback and learning insights
    */
-  async processFeedback(feedback, explanationResult) {
-    try {
-      // Process user feedback
-      this.emit("processingStep", { step: "userFeedback", status: "starting" });
-      const feedbackResult = await this.agents.userFeedback.processFeedback(
-        feedback,
-        explanationResult
-      );
-      this.updateState("userFeedback", feedbackResult);
-
-      // Generate learning insights
-      this.emit("processingStep", { step: "learning", status: "starting" });
-      const learningResult = await this.agents.learning.analyzeForImprovements(
-        feedbackResult,
-        this.processingHistory
-      );
-      this.updateState("learning", learningResult);
-
-      return {
-        feedback: feedbackResult,
-        learning: learningResult,
-      };
-    } catch (error) {
-      console.error("Error processing feedback:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Handle workflow termination
-   * @param {Object} terminationData - Information about the termination
-   * @returns {Promise<Object>} - Termination handling result
-   */
-  async handleTermination(terminationData) {
-    try {
-      // Update state to reflect termination
-      this.currentState.terminated = true;
-      this.currentState.endTime = Date.now();
-      this.currentState.totalDuration =
-        this.currentState.endTime - this.currentState.startTime;
-      this.currentState.terminationReason =
-        terminationData.reason || "User rejected a step";
-
-      // Stop the orchestrator monitoring
-      this.#stopOrchestratorMonitoring();
-
-      // Stop Git repository polling
-      this.stopGitRepositoryPolling();
-
-      // Let orchestrator handle the termination
-      const terminationSummary =
-        await this.agents.orchestrator.handleTermination({
-          ...terminationData,
-          sessionId: this.activeSession,
-          timestamp: new Date().toISOString(),
-        });
-
-      // Add to processing history
-      this.processingHistory.push({
-        name: "Termination",
-        processed: true,
-        result: {
-          output: `Workflow terminated at step ${terminationData.rejectedStep}. Reason: ${terminationData.reason}`,
-        },
-        timestamp: new Date().toISOString(),
-      });
-
-      // Emit termination event
-      this.emit("terminated", {
-        sessionId: this.activeSession,
-        step: terminationData.rejectedStep,
-        reason: terminationData.reason,
-        timestamp: new Date().toISOString(),
-      });
-
-      return terminationSummary;
-    } catch (error) {
-      console.error("Error handling termination:", error);
-      throw error;
-    }
+  async submitFeedback(feedback, explanationResult) {
+    return processFeedback(
+      feedback,
+      explanationResult,
+      this.agents.userFeedback,
+      this.agents.learning,
+      this.processingHistory,
+      (agentName, result) => this.updateState(agentName, result)
+    );
   }
 
   /**
@@ -1015,8 +741,12 @@ class AgentManager extends EventEmitter {
       this.updateState("gitAnalysis", gitAnalysisResult);
 
       // Update orchestrator
-      await this.#updateOrchestrator(
-        "Manual Git analysis triggered and completed"
+      await updateOrchestrator(
+        "Manual Git analysis triggered and completed",
+        this.agents.orchestrator,
+        this.currentState,
+        this.processingHistory,
+        (agentName, result) => this.updateState(agentName, result)
       );
 
       return gitAnalysisResult;
