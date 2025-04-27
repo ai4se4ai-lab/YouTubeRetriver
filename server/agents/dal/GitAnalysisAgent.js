@@ -892,6 +892,10 @@ class GitAnalysisAgent extends BaseAgent {
 
         // Use the proper contextLines variable inside the loop
         if (categorizedIssues[category]) {
+          const fileChange = diffData.changedFiles.find(
+            (f) => f.file === issue.file
+          );
+
           categorizedIssues[category].push({
             ...issue,
             context: contextLines,

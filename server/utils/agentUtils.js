@@ -36,7 +36,14 @@ function mergeEditedContent(originalResult, editedResult) {
  * @param {Object} agents - All agents object
  * @returns {void}
  */
-function updateAgentState(stateObject, processingHistory, agentName, result, emitCallback, agents) {
+function updateAgentState(
+  stateObject,
+  processingHistory,
+  agentName,
+  result,
+  emitCallback,
+  agents
+) {
   // Special handling for Git Analysis Agent in monitoring mode
   if (agentName === "gitAnalysis" && agents.gitAnalysis.isMonitoring) {
     // Clone result but override processed state
@@ -87,38 +94,47 @@ function updateAgentState(stateObject, processingHistory, agentName, result, emi
  * @returns {boolean} - Whether the agent needs approval
  */
 function needsApproval(agentName, requiredApprovals, options = {}) {
-  // Override with automatic approvals if specified
-  if (options.automaticApprovals) return false;
+  console.log("DEBUGGING APPROVALS:", {
+    agentName,
+    requiredApprovals,
+    options,
+    automaticApprovals: options.automaticApprovals,
+  });
 
-  if (requiredApprovals === "all") return true;
-  if (requiredApprovals === "none") return false;
-  return Array.isArray(requiredApprovals) && requiredApprovals.includes(agentName);
+  // Override with automatic approvals if specified
+  if (options.automaticApprovals) {
+    console.log(`Auto approvals enabled, skipping approval for ${agentName}`);
+    return false;
+  }
+
+  const needsIt =
+    requiredApprovals === "all" ||
+    (Array.isArray(requiredApprovals) && requiredApprovals.includes(agentName));
+
+  console.log(`${agentName} needs approval: ${needsIt}`);
+  return needsIt;
 }
 
-/**
- * Conditional approval function that checks the configuration
- * @param {string} agentName - The name of the agent
- * @param {Object} result - The result to potentially approve
- * @param {Function} approvalCallback - The callback for user approval
- * @param {string|Array} requiredApprovals - Config for required approvals
- * @param {Object} options - Processing options
- * @returns {Promise<Object>} - The approved result
- */
-async function conditionalApproval(agentName, result, approvalCallback, requiredApprovals, options = {}) {
-  console.log(
-    `Checking if ${agentName} requires user approval based on configuration`
-  );
-  if (needsApproval(agentName, requiredApprovals, options)) {
-    console.log(
-      `User approval required for ${agentName} based on configuration`
-    );
-    // Request approval from user
+async function conditionalApproval(
+  agentName,
+  result,
+  approvalCallback,
+  requiredApprovals,
+  options = {}
+) {
+  console.log(`CONDITIONAL APPROVAL CHECK for ${agentName}`, {
+    requiredApprovals,
+    options,
+  });
+
+  const approval = needsApproval(agentName, requiredApprovals, options);
+  console.log(`Approval decision for ${agentName}: ${approval}`);
+
+  if (approval) {
+    console.log(`Requesting user approval for ${agentName}`);
     return approvalCallback(agentName, result);
   } else {
-    // Skip approval and continue immediately
-    console.log(
-      `Skipping approval for ${agentName} based on configuration`
-    );
+    console.log(`Skipping approval for ${agentName}`);
     return result;
   }
 }
@@ -186,5 +202,5 @@ module.exports = {
   conditionalApproval,
   summarizeAgentOutput,
   getAgentStatuses,
-  resetAllAgents
+  resetAllAgents,
 };

@@ -252,6 +252,10 @@ class AgentManager extends EventEmitter {
 
     // Modified approval function that checks the configuration and calls utility
     const conditionalApprovalWrapper = async (agentName, result) => {
+      console.log(
+        `Checking if ${agentName} needs approval:`,
+        requiredApprovals
+      );
       return conditionalApproval(
         agentName,
         result,
