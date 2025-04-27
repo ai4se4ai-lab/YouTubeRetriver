@@ -5,6 +5,7 @@
  */
 const EventEmitter = require("events");
 const gitConfig = require("../config/gitConfig");
+const config = require("../config/config");
 
 // Import utility functions
 const {
@@ -248,7 +249,7 @@ class AgentManager extends EventEmitter {
     this.gitTriggeredWorkflow = options.gitTriggeredOnly || false;
 
     // Check which agents require approval
-    const requiredApprovals = gitConfig.agentApprovals?.required || "none";
+    const requiredApprovals = config.agentApprovals?.required || "none";
 
     // Modified approval function that checks the configuration and calls utility
     const conditionalApprovalWrapper = async (agentName, result) => {
@@ -708,15 +709,32 @@ class AgentManager extends EventEmitter {
    * @param {Object} explanationResult - Final explanation presented to user
    * @returns {Promise<Object>} - Processed feedback and learning insights
    */
-  async submitFeedback(feedback, explanationResult) {
-    return processFeedback(
-      feedback,
-      explanationResult,
-      this.agents.userFeedback,
-      this.agents.learning,
-      this.processingHistory,
-      (agentName, result) => this.updateState(agentName, result)
-    );
+  async processFeedback(feedback, explanationResult) {
+    try {
+      console.log("Processing user feedback");
+
+      // Process user feedback
+      const feedbackResult = await this.agents.userFeedback.processFeedback(
+        feedback,
+        explanationResult
+      );
+      this.updateState("userFeedback", feedbackResult);
+
+      // Generate learning insights
+      const learningResult = await this.agents.learning.analyzeForImprovements(
+        feedbackResult,
+        this.processingHistory
+      );
+      this.updateState("learning", learningResult);
+
+      return {
+        feedback: feedbackResult,
+        learning: learningResult,
+      };
+    } catch (error) {
+      console.error("Error processing feedback:", error);
+      throw error;
+    }
   }
 
   /**
