@@ -410,12 +410,7 @@ class AgentManager extends EventEmitter {
           formattedData
         );
 
-        const formattedResult = this.formatAgentResult(
-          contentAnalysisResult,
-          this.agents.contentAnalysis
-        );
-
-        this.updateState("contentAnalysis", formattedResult);
+        this.updateState("contentAnalysis", contentAnalysisResult);
 
         // Wait for user approval and get edited content if any
         const approvedContentAnalysis = await conditionalApprovalWrapper(

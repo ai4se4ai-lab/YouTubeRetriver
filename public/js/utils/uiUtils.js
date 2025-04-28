@@ -77,18 +77,21 @@ window.uiUtils = (function () {
           outputContent = agentSystem.workflow.editedResults[agentKey];
         }
 
+        // Extract the meaningful content using the helper function
+        const displayContent = window.uiHelpers.getOutputContent(outputContent);
+
         // Create editable content area
         resultElement.innerHTML = `
-            <div class="markdown-view">${
-              md ? md.render(outputContent) : `<p>${outputContent}</p>`
-            }</div>
-            <div id="${agentKey}-editable" class="editable-content" contenteditable="true">${outputContent}</div>
-            <div class="editor-controls">
-              <button class="btn editor-toggle-btn">Toggle Editor</button>
-              <button class="btn editor-save-btn" onclick="saveEditedResult('${agentKey}')">Save Changes</button>
-              <span id="${agentKey}-save-confirmation" class="save-confirmation">Changes saved!</span>
-            </div>
-          `;
+  <div class="markdown-view">${
+    md ? md.render(displayContent) : `<p>${displayContent}</p>`
+  }</div>
+  <div id="${agentKey}-editable" class="editable-content" contenteditable="true">${displayContent}</div>
+  <div class="editor-controls">
+    <button class="btn editor-toggle-btn">Toggle Editor</button>
+    <button class="btn editor-save-btn" onclick="saveEditedResult('${agentKey}')">Save Changes</button>
+    <span id="${agentKey}-save-confirmation" class="save-confirmation">Changes saved!</span>
+  </div>
+`;
 
         // Add toggle functionality
         const toggleBtn = resultElement.querySelector(".editor-toggle-btn");

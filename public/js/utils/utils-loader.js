@@ -30,6 +30,7 @@
 
   // Define utility files to load
   const utilityFiles = [
+    "js/utils/uiHelpers.js",
     "js/utils/uiUtils.js",
     "js/utils/modalUtils.js",
     "js/utils/socketClientUtils.js",
@@ -49,6 +50,7 @@
 
       // Do a quick check to make sure all utilities are available
       const utilitiesLoaded =
+        window.uiHelpers &&
         window.uiUtils &&
         window.modalUtils &&
         window.socketClientUtils &&

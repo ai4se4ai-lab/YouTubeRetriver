@@ -40,29 +40,22 @@ window.modalUtils = (function () {
     }
 
     if (resultElement) {
-      let outputContent = "";
-
-      if (typeof result === "object") {
-        if (result.output) {
-          outputContent = result.output;
-        } else {
-          outputContent = JSON.stringify(result, null, 2);
-        }
-      } else {
-        outputContent = result || "No result data available";
-      }
+      // Extract the meaningful content using the helper function
+      const displayContent = window.uiHelpers.getOutputContent(result);
 
       // Check if we have an edited version of this content
       if (agentSystem.workflow.editedResults[step]) {
-        outputContent = agentSystem.workflow.editedResults[step];
+        // Changed agentKey to step
+        const editedContent = agentSystem.workflow.editedResults[step]; // Changed agentKey to step
+        outputContent = editedContent;
       }
 
       // Create editable content area with markdown preview
       resultElement.innerHTML = `
           <div class="markdown-view">${
-            md ? md.render(outputContent) : `<p>${outputContent}</p>`
+            md ? md.render(displayContent) : `<p>${displayContent}</p>`
           }</div>
-          <div id="modal-${step}-editable" class="editable-content" contenteditable="true">${outputContent}</div>
+          <div id="modal-${step}-editable" class="editable-content" contenteditable="true">${displayContent}</div>
           <div class="editor-controls">
             <button class="btn editor-toggle-btn">Toggle Editor</button>
             <button class="btn editor-save-btn" id="modal-save-btn">Save Changes</button>
@@ -87,7 +80,7 @@ window.modalUtils = (function () {
       const saveBtn = resultElement.querySelector("#modal-save-btn");
       saveBtn.addEventListener("click", () => {
         const content = editableView.innerText;
-        agentSystem.workflow.editedResults[step] = content;
+        agentSystem.workflow.editedResults[step] = content; // Changed agentKey to step
         markdownView.innerHTML = md ? md.render(content) : `<p>${content}</p>`;
 
         const saveConfirm = resultElement.querySelector(
@@ -100,7 +93,7 @@ window.modalUtils = (function () {
 
         // Add orchestrator message
         addOrchestratorMessage(
-          `User edited content for ${step} in approval modal. Changes saved.`,
+          `User edited content for ${step} in approval modal. Changes saved.`, // Changed agentKey to step
           false,
           agentSystem
         );
@@ -269,9 +262,12 @@ window.modalUtils = (function () {
       `;
 
         // Add whatever results we have so far
-        if (explanationResult && explanationResult.output) {
+        if (explanationResult) {
+          // Extract the meaningful content using the helper function
+          const displayContent =
+            window.uiHelpers.getOutputContent(explanationResult);
           resultContent.innerHTML += md.render(
-            extractAnalogiesForDisplay(explanationResult.output)
+            extractAnalogiesForDisplay(displayContent)
           );
         } else {
           resultContent.innerHTML +=
@@ -279,9 +275,12 @@ window.modalUtils = (function () {
         }
       } else {
         // Show full results
-        if (explanationResult && explanationResult.output) {
+        if (explanationResult) {
+          // Extract the meaningful content using the helper function
+          const displayContent =
+            window.uiHelpers.getOutputContent(explanationResult);
           resultContent.innerHTML = md.render(
-            extractAnalogiesForDisplay(explanationResult.output)
+            extractAnalogiesForDisplay(displayContent)
           );
         } else {
           resultContent.innerHTML =

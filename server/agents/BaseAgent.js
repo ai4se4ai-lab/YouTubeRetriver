@@ -36,8 +36,12 @@ class BaseAgent {
       console.log(`${this.name} starting processing...`);
 
       // If we have edited content and it's relevant to this processing
+      // (e.g., it's from a previous agent that feeds into this one),
+      // we can incorporate it into our processing logic here
       if (editedContent) {
         console.log(`${this.name} processing with edited content`);
+        // You might need to update 'data' based on editedContent
+        // This is specific to each agent's implementation
       }
 
       // Add instruction to summarize output for display to the system prompt
@@ -75,34 +79,27 @@ class BaseAgent {
 
       this.result = {
         output: summarizedOutput,
-        rawOutput: rawOutput,
+        rawOutput: rawOutput, // Keep the raw output for agents that might need it
         usage: response.usage,
         model: response.model,
       };
 
       this.processed = true;
       console.log(`${this.name} completed processing`);
-
-      return summarizedOutput;
     } catch (error) {
       console.error(`${this.name} processing error:`, error);
       this.error = error.message;
-      this.processed = false; // Explicitly set to false on error
-
-      // Return an error result from the catch block
-      return {
-        name: this.name,
-        description: this.description,
-        processed: false,
-        result: {
-          output: `Error in ${this.name}: ${error.message}`,
-        },
-        error: error.message,
-        duration: this.endTime ? this.endTime - this.startTime : 0,
-      };
     } finally {
       this.endTime = Date.now();
       this.duration = this.endTime - this.startTime;
+      return {
+        name: this.name,
+        description: this.description,
+        processed: this.processed,
+        result: this.result,
+        error: this.error,
+        duration: this.duration,
+      };
     }
   }
 
