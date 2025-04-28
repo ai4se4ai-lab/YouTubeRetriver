@@ -374,19 +374,12 @@ class AgentManager extends EventEmitter {
             status: "starting",
           });
 
-          // Make sure any necessary data is being passed from Git Analysis to Content Analysis
-          const contentAnalysisData = {
-            // Include relevant data from gitAnalysisResult
-            gitFindings:
-              gitAnalysisResult?.result?.output || "No Git findings available",
-            // If we have direct Git data from a triggered workflow, include it
-            gitChangesData: youtubeData.gitAnalysisData || null,
+          const gitFindings = {
+            issues: gitAnalysisResult?.result?.issues || [],
+            categories: gitAnalysisResult?.result?.categories || {},
+            recommendations: gitAnalysisResult?.result?.recommendations || [],
           };
-
-          // Update youtubeData to include Git findings if not already present
-          if (!youtubeData.gitFindings && gitAnalysisResult?.result?.output) {
-            youtubeData.gitFindings = gitAnalysisResult.result.output;
-          }
+          youtubeData.gitFindings = gitFindings;
 
           // Ensure there's sufficient data for Content Analysis
           if (!youtubeData.likedVideos && !youtubeData.watchHistory) {
@@ -416,7 +409,13 @@ class AgentManager extends EventEmitter {
         contentAnalysisResult = await this.agents.contentAnalysis.analyze(
           formattedData
         );
-        this.updateState("contentAnalysis", contentAnalysisResult);
+
+        const formattedResult = this.formatAgentResult(
+          contentAnalysisResult,
+          this.agents.contentAnalysis
+        );
+
+        this.updateState("contentAnalysis", formattedResult);
 
         // Wait for user approval and get edited content if any
         const approvedContentAnalysis = await conditionalApprovalWrapper(

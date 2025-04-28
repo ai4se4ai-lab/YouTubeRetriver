@@ -31,6 +31,31 @@ class AnalogyGenerationAgent extends BaseAgent {
    * @returns {Object} - Formatted input for analogy generation
    */
   formatInput(input) {
+    // Extract Git analysis issues by category
+    const gitIssues = {};
+    if (input.gitAnalysis?.result?.output) {
+      // Parse the Git output to extract categorized issues
+      try {
+        const gitData =
+          typeof input.gitAnalysis.result.output === "string"
+            ? JSON.parse(input.gitAnalysis.result.output)
+            : input.gitAnalysis.result.output;
+
+        // Organize by category for easier analogy creation
+        gitIssues.ide =
+          gitData.issues?.filter((i) => i.category === "ide") || [];
+        gitIssues.environmental =
+          gitData.issues?.filter((i) => i.category === "environmental") || [];
+        gitIssues.ethical =
+          gitData.issues?.filter((i) => i.category === "ethical") || [];
+        gitIssues.security =
+          gitData.issues?.filter((i) => i.category === "security") || [];
+      } catch (e) {
+        console.warn("Could not parse Git analysis output:", e);
+        gitIssues.rawOutput = input.gitAnalysis.result.output;
+      }
+    }
+
     return {
       contentAnalysis:
         input.contentAnalysis?.result?.output ||
@@ -38,8 +63,11 @@ class AnalogyGenerationAgent extends BaseAgent {
       knowledgeContext:
         input.knowledgeRetrieval?.result?.output ||
         "No knowledge context available",
-      gitAnalysis:
-        input.gitAnalysis?.result?.output || "No Git analysis available",
+      gitAnalysis: {
+        rawOutput:
+          input.gitAnalysis?.result?.output || "No Git analysis available",
+        issues: gitIssues,
+      },
       sourceAgents: [
         input.contentAnalysis?.name || "Unknown",
         input.knowledgeRetrieval?.name || "Unknown",

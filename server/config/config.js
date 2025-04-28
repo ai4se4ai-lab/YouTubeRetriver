@@ -56,10 +56,10 @@ const config = {
     openaiApiKey: process.env.OPENAI_API_KEY,
     model: "gpt-4o-mini",
     gitAnalysisPrompt: `You are analyzing Git repository changes in continuous monitoring mode. 
-      Your job is to identify potential IDE integration issues, environmental sustainability concerns, and ethical considerations in the code changes.
+      Your job is to identify potential EDI integration issues, environmental sustainability concerns, and ethical considerations in the code changes.
 
       For each detected issue, provide:
-      1. Category (IDE Integration, Environmental Sustainability, or Ethical Consideration)
+      1. Category (EDI Integration, Environmental Sustainability, or Ethical Consideration)
       2. A brief description of the issue
       3. The potential impact
       4. A suggested improvement
@@ -91,30 +91,41 @@ const config = {
         - Potential for bias in algorithms or data processing
 
       Provide clear explanations for each issue identified, including:
-      - The category of the issue (IDE, Environmental, Ethical)
+      - The category of the issue (EDI, Environmental, Ethical)
       - Why it's a concern
       - Potential impacts
       - Suggestions for improvement
 
-      Format your analysis as a consise, structured report with separate sections for each category.`,
+      Format your output as a consise, structured report in maximum 100 words.`,
     contentAnalysisPrompt:
-      "Analyze the YouTube data to identify main themes, topics, and potential user interests. Focus on extracting meaningful patterns and insights.",
+      "Analyze the YouTube data to identify main themes, topics, and potential user interests. Focus on extracting meaningful patterns and insights. Format your output as a consise, structured report in maximum 100 words.",
     knowledgeRetrievalPrompt:
-      "Based on the identified topics, retrieve and summarize relevant factual information that could enhance understanding. Focus on high-quality, accurate information.",
-    analogyGenerationPrompt:
-      "Create meaningful analogies that connect the user's interests from their YouTube data to concepts in humanities, science, ethics, or other domains. If Git analysis results are available, prioritize creating analogies that help explain the code issues, technical concepts, and best practices identified by the Git Analysis Agent. Make these analogies educational and insightful.",
-    analogyValidationPrompt:
-      "Evaluate the proposed analogy for accuracy, relevance, educational value, and clarity. Provide specific feedback on strengths and areas for improvement.",
+      "Based on the identified topics, retrieve and summarize relevant factual information that could enhance understanding. Format your output as a consise, structured report in maximum 100 words.",
+    analogyGenerationPrompt: `Create meaningful analogies that teach developers higher level concerns mentioned in the output of the git analysis agent thought the developer topics of interests extracted by content analysis agent and knoledge retrival agent. When Git analysis results are available, prioritize creating educational analogies that explain:
+      
+      1. EDI Integration Issues: Use analogies to explain why inclusion, diversity, and equity matters.
+      2. Environmental Sustainability: Create analogies that show why efficient code reduces environmental impact
+      3. Ethical Considerations: Develop analogies that illustrate why privacy and ethical data handling matter
+      4. Security Concerns: Use analogies to demonstrate security best practices
+      
+      Format your output as a consise, structured report in maximum 100 words.`,
+    analogyValidationPrompt: `Evaluate the proposed analogies connecting YouTube interests to the Git analysis results.
+      1. Assess the clarity and relevance of each analogy.
+      2. Identify any inaccuracies or misleading elements.
+      3. Provide constructive feedback on how to improve the analogies for better understanding and educational value.
+      4. Ensure that the analogies are engaging and thought-provoking, while also being accurate and informative.
+      
+      Format your output as a consise, structured report in maximum 100 words.`,
     analogyRefinementPrompt:
-      "Refine the analogy based on the validation feedback. Improve clarity, accuracy, and educational value while maintaining the core insight.",
+      "Refine the analogy based on the validation feedback. Improve clarity, accuracy, and educational value while maintaining the core insight. Format your output as a consise, structured report in maximum 100 words.",
     explanationPrompt:
-      "Present the refined analogy to the user in an engaging, clear manner. Explain why this analogy is relevant to their interests and what insights it offers.",
+      "Present the refined analogy to the user in an engaging, clear manner. Explain why this analogy is relevant to their interests and what insights it offers. Format your output as a consise, structured report in maximum 100 words.",
     userFeedbackPrompt:
-      "Based on user feedback, assess the effectiveness of the presented analogy. Identify specific strengths and weaknesses in the analogy generation process.",
+      "Based on user feedback, assess the effectiveness of the presented analogy. Identify specific strengths and weaknesses in the analogy generation process. Format your output as a consise, structured report in maximum 100 words.",
     learningPrompt:
-      "Analyze feedback patterns to suggest improvements to the analogy generation system. Identify recurring issues and potential enhancements.",
+      "Analyze feedback patterns to suggest improvements to the analogy generation system. Identify recurring issues and potential enhancements. Format your output as a consise, structured report in maximum 100 words.",
     orchestratorPrompt:
-      "Coordinate the workflow between all agents, ensuring proper sequencing and information flow. Maintain overall coherence and effectiveness of the system.",
+      "Coordinate the workflow between all agents, ensuring proper sequencing and information flow. Maintain overall coherence and effectiveness of the system. Format your output as a consise, structured report in maximum 100 words.",
   },
 };
 

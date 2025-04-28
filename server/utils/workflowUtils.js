@@ -11,12 +11,12 @@
  */
 function initSession(sessionId = null, resetAgentsFn) {
   const activeSession = sessionId || `session_${Date.now()}`;
-  
+
   // Reset all agents
   if (resetAgentsFn) {
     resetAgentsFn();
   }
-  
+
   return activeSession;
 }
 
@@ -29,7 +29,13 @@ function initSession(sessionId = null, resetAgentsFn) {
  * @param {Function} updateStateFn - Function to update state
  * @returns {Promise<void>}
  */
-async function updateOrchestrator(message, orchestrator, currentState, processingHistory, updateStateFn) {
+async function updateOrchestrator(
+  message,
+  orchestrator,
+  currentState,
+  processingHistory,
+  updateStateFn
+) {
   try {
     const updateResult = await orchestrator.monitorWorkflow(
       {
@@ -57,7 +63,14 @@ async function updateOrchestrator(message, orchestrator, currentState, processin
  * @param {number} interval - Monitoring interval in milliseconds
  * @returns {NodeJS.Timeout} - Interval ID
  */
-function startOrchestratorMonitoring(orchestrator, agents, processingHistory, updateStateFn, emitEventFn, interval = 10000) {
+function startOrchestratorMonitoring(
+  orchestrator,
+  agents,
+  processingHistory,
+  updateStateFn,
+  emitEventFn,
+  interval = 10000
+) {
   return setInterval(async () => {
     try {
       // Get current state of all agents
@@ -73,18 +86,26 @@ function startOrchestratorMonitoring(orchestrator, agents, processingHistory, up
       );
 
       // Only update state if there's something significant to report
+      // Add proper null/undefined checks
       if (
-        (monitorResult.result &&
-          monitorResult.result.output.includes("Alert")) ||
-        monitorResult.result.output.includes("bottleneck") ||
-        monitorResult.result.output.includes("intervention")
+        monitorResult &&
+        (typeof monitorResult === "string"
+          ? monitorResult.includes("Alert") ||
+            monitorResult.includes("bottleneck") ||
+            monitorResult.includes("intervention")
+          : monitorResult.result?.output?.includes("Alert") ||
+            monitorResult.result?.output?.includes("bottleneck") ||
+            monitorResult.result?.output?.includes("intervention"))
       ) {
         updateStateFn("orchestratorMonitor", monitorResult);
 
-        // Emit an event so the UI can show the orchestrator is active
+        // Emit an event with the appropriate message format
         emitEventFn("orchestratorUpdate", {
           timestamp: new Date().toISOString(),
-          message: monitorResult.result.output,
+          message:
+            typeof monitorResult === "string"
+              ? monitorResult
+              : monitorResult.result?.output || "Orchestrator update",
         });
       }
     } catch (error) {
@@ -104,19 +125,18 @@ function startOrchestratorMonitoring(orchestrator, agents, processingHistory, up
  * @returns {Promise<Object>} - Termination summary
  */
 async function handleWorkflowTermination(
-  terminationData, 
-  orchestrator, 
-  activeSession, 
-  currentState, 
-  processingHistory, 
+  terminationData,
+  orchestrator,
+  activeSession,
+  currentState,
+  processingHistory,
   emitEventFn
 ) {
   try {
     // Update state to reflect termination
     currentState.terminated = true;
     currentState.endTime = Date.now();
-    currentState.totalDuration =
-      currentState.endTime - currentState.startTime;
+    currentState.totalDuration = currentState.endTime - currentState.startTime;
     currentState.terminationReason =
       terminationData.reason || "User rejected a step";
 
@@ -163,11 +183,11 @@ async function handleWorkflowTermination(
  * @returns {Promise<Object>} - Processed feedback and learning insights
  */
 async function processFeedback(
-  feedback, 
-  explanationResult, 
-  userFeedbackAgent, 
-  learningAgent, 
-  processingHistory, 
+  feedback,
+  explanationResult,
+  userFeedbackAgent,
+  learningAgent,
+  processingHistory,
   updateStateFn
 ) {
   try {
@@ -200,5 +220,5 @@ module.exports = {
   updateOrchestrator,
   startOrchestratorMonitoring,
   handleWorkflowTermination,
-  processFeedback
+  processFeedback,
 };

@@ -9,8 +9,14 @@
  * @param {Object} editedResult - Potentially edited result object
  * @returns {Object} - Merged result object
  */
+// In mergeEditedContent function
 function mergeEditedContent(originalResult, editedResult) {
-  // If no edited content, return original
+  // Handle string results
+  if (typeof originalResult === "string") {
+    return typeof editedResult === "string" ? editedResult : originalResult;
+  }
+
+  // Handle object results (backwards compatibility)
   if (!editedResult) {
     return originalResult;
   }
@@ -19,7 +25,9 @@ function mergeEditedContent(originalResult, editedResult) {
   const mergedResult = JSON.parse(JSON.stringify(originalResult));
 
   // If the edited result has updated output, use it
-  if (editedResult.result && editedResult.result.output) {
+  if (typeof editedResult === "string") {
+    mergedResult.result.output = editedResult;
+  } else if (editedResult.result && editedResult.result.output) {
     mergedResult.result.output = editedResult.result.output;
   }
 

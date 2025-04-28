@@ -1067,7 +1067,6 @@ class GitAnalysisAgent extends BaseAgent {
       return result;
 
       // Process through LLM for analysis
-      //return this.process(analysisResults, this.prompt);
     } catch (error) {
       console.error("GitAnalysisAgent: Error analyzing changes:", error);
       this.error = error.message;
